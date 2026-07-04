@@ -14,7 +14,13 @@
     <div class="title-car-display"><canvas id="title-canvas"></canvas></div>
     <button id="btn-play" class="big-btn">▶ RACE</button>
     <button id="btn-listen" class="big-btn orange">👂 LISTEN &amp; FIND</button>
+    <button id="btn-build" class="big-btn purple">🧱 BUILD A TRACK</button>
     <button id="btn-garage" class="big-btn blue">🚗 GARAGE (<span id="garage-count">0/0</span>)</button>
+    <div id="difficulty-row">
+      <button class="diff-btn" data-diff="easy">🐢<span>EASY</span></button>
+      <button class="diff-btn" data-diff="medium">🚗<span>MEDIUM</span></button>
+      <button class="diff-btn" data-diff="hard">🚀<span>HARD</span></button>
+    </div>
     <div class="title-footer">
       <button id="btn-speech-toggle" class="mini-btn">🔊</button>
       <button id="btn-grownups" class="mini-btn">👪 grown-ups</button>
@@ -36,6 +42,17 @@
         <p id="listen-unlock-name" style="font-size:22px;color:#e63946;font-weight:800;"></p>
       </div>
     </div>
+  </section>
+
+  <section id="screen-build" class="screen">
+    <div id="build-hud">
+      <button id="btn-build-back" class="mini-btn">⬅</button>
+      <h2>🧱 Build Your Track</h2>
+      <button id="btn-build-clear" class="mini-btn">🗑 Clear</button>
+    </div>
+    <div id="build-strip"></div>
+    <div id="build-palette"></div>
+    <button id="btn-build-race" class="big-btn">🏁 RACE MY TRACK!</button>
   </section>
 
   <div id="grownups-overlay" class="overlay hidden">
@@ -97,5 +114,6 @@
 <script src="js/learning.js"></script>
 <script src="js/game.js"></script>
 <script src="js/listen.js"></script>
+<script src="js/builder.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // ===================== Save data =====================
 const STORAGE_KEY = 'twr_save_v1';
 function defaultSave() {
-  return { unlocked: [CAR_DESIGNS[0].id, CAR_DESIGNS[1].id], selected: CAR_DESIGNS[0].id, wins: 0 };
+  return { unlocked: [CAR_DESIGNS[0].id, CAR_DESIGNS[1].id], selected: CAR_DESIGNS[0].id, wins: 0, difficulty: 'easy' };
 }
 function loadSave() {
   try {
@@ -27,6 +27,7 @@ const screens = {
   garage: document.getElementById('screen-garage'),
   race: document.getElementById('screen-race'),
   listen: document.getElementById('screen-listen'),
+  build: document.getElementById('screen-build'),
 };
 let currentScreen = 'title';
 function showScreen(name) {
@@ -36,6 +37,7 @@ function showScreen(name) {
   if (name === 'garage') renderGarage();
   if (name === 'race') initRace();
   if (name === 'listen' && window.initListen) window.initListen();
+  if (name === 'build' && window.initBuild) window.initBuild();
 }
 
 // ===================== Title screen =====================
@@ -55,6 +57,24 @@ function renderTitle() {
 document.getElementById('btn-play').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('race'); });
 document.getElementById('btn-garage').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('garage'); });
 document.getElementById('btn-listen').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('listen'); });
+document.getElementById('btn-build').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('build'); });
+
+// difficulty picker
+function renderDifficulty() {
+  document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.diff === (save.difficulty || 'easy'));
+  });
+}
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    save.difficulty = btn.dataset.diff;
+    persist();
+    SFX.click();
+    Speech.say(DIFFICULTIES[btn.dataset.diff].label + '!');
+    renderDifficulty();
+  });
+});
+renderDifficulty();
 
 // speech on/off toggle
 const speechToggleBtn = document.getElementById('btn-speech-toggle');
@@ -151,7 +171,6 @@ function renderGarage() {
 document.getElementById('btn-garage-back').addEventListener('click', () => { SFX.click(); showScreen('title'); });
 
 // ===================== Race constants =====================
-const TRACK_LENGTH = 8000;          // world px to the finish line
 const CAR_SCALE = 1.5;              // car draw scale in the race
 const WHEEL_X = 18 * CAR_SCALE;     // half wheelbase in world px
 const WHEEL_R = 9 * CAR_SCALE;
@@ -165,71 +184,97 @@ const AIR_ROT_ACCEL = 5.5;          // rad/s^2 from pedals while airborne
 const STUN_DURATION = 1.0;
 const VIEW_W = 1000;                // world px visible across the canvas width
 
-const CAVE_ZONES_TEMPLATE = [
-  { start: 2400, end: 3300 },
-  { start: 4600, end: 5500 },
-  { start: 6600, end: 7400 },
-];
 const CAVE_CLEARANCE = 115;         // roof height above the base floor inside caves
 
 const OPP_NAMES = ['Rusty', 'Bolt', 'Turbo Rex'];
 const OPP_COLORS = ['#b5651d', '#2b6cff', '#2a9d4f'];
 const OPP_BASE_SPEED = [200, 260, 320];
 
-// ===================== Terrain =====================
-// Heightfield: worldY (canvas y, down = positive) of the ground at world x.
-// Rebuilt with random phases each race.
+// ===================== Difficulty =====================
+const DIFFICULTIES = {
+  easy:   { label: 'Easy',   icon: '🐢', oppMult: 0.72, hearts: 5, caves: 1 },
+  medium: { label: 'Medium', icon: '🚗', oppMult: 1.0,  hearts: 3, caves: 2 },
+  hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.15, hearts: 3, caves: 3 },
+};
+function currentDifficulty() { return DIFFICULTIES[save.difficulty] || DIFFICULTIES.easy; }
+
+// ===================== Track segments (the LEGO pieces) =====================
+// A track is a sequence of segments. Random races shuffle them; the builder
+// screen lets the kid snap his own together.
+const SEG_LEN = 900;
+const START_PAD = 500;
+const FINISH_PAD = 400;
+const SEGMENT_TYPES = {
+  road:     { label: 'ROAD',     speak: 'Road!' },
+  hills:    { label: 'HILLS',    speak: 'Hills!' },
+  bumps:    { label: 'BUMPS',    speak: 'Bumpy road!' },
+  jump:     { label: 'JUMP',     speak: 'Big jump!' },
+  mountain: { label: 'MOUNTAIN', speak: 'Big mountain!' },
+  cave:     { label: 'CAVE',     speak: 'Cave! Go slow!' },
+  coins:    { label: 'COINS',    speak: 'Coins!' },
+};
+
+function randomSegments() {
+  const fun = ['hills', 'bumps', 'jump', 'coins', 'mountain', 'hills', 'jump', 'coins'];
+  const segs = [];
+  for (let i = 0; i < 8; i++) segs.push(fun[Math.floor(Math.random() * fun.length)]);
+  // place caves (count set by difficulty) anywhere except the first segment
+  const spots = [1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - 0.5);
+  for (let c = 0; c < currentDifficulty().caves; c++) segs[spots[c]] = 'cave';
+  return segs;
+}
+
+// Build a playable track (terrain functions + feature lists) from segments.
 let terra = null;
-function buildTerrain() {
+function buildTrack(segments) {
   const p1 = Math.random() * Math.PI * 2;
   const p2 = Math.random() * Math.PI * 2;
-  const p3 = Math.random() * Math.PI * 2;
-  const baseY = 420;
-  // rolling hills WITHOUT the cave floor bumps (the cave roof hangs from this)
-  const groundBase = (x) => {
-    const ramp = Math.min(1, Math.max(0, (x - 350) / 900)); // flat start
-    let y = baseY;
-    y += ramp * 48 * Math.sin(x / 99 * 1.0 + p1) * Math.sin(x / 631 + p2);
-    y += ramp * 30 * Math.sin(x / 151 + p2);
-    y += ramp * 9 * Math.sin(x / 53 + p3);
+  const length = START_PAD + segments.length * SEG_LEN + FINISH_PAD;
+  const caves = [];
+  const ramps = [];   // linear climb + sharp drop: fast cars launch off these
+  segments.forEach((type, i) => {
+    const s0 = START_PAD + i * SEG_LEN;
+    if (type === 'jump') ramps.push({ x: s0 + 370, L: 170, H: 70 });
+    if (type === 'cave') {
+      const z = { start: s0 + 100, end: s0 + SEG_LEN - 100 };
+      caves.push(z);
+      const len = z.end - z.start;
+      ramps.push({ x: z.start + len * 0.22, L: 110, H: 50 });
+      ramps.push({ x: z.start + len * 0.58, L: 110, H: 50 });
+    }
+  });
+  // smooth base shape (no ramps) — cave roofs hang from this
+  const shape = (x) => {
+    const rampIn = Math.min(1, Math.max(0, (x - 300) / 600)); // flat start
+    let y = 420 + rampIn * 14 * Math.sin(x / 210 + p1);
+    const i = Math.floor((x - START_PAD) / SEG_LEN);
+    if (i >= 0 && i < segments.length) {
+      const t = (x - START_PAD - i * SEG_LEN) / SEG_LEN;
+      const w = Math.sin(Math.PI * t);   // fades to 0 at segment edges
+      const type = segments[i];
+      if (type === 'hills') y += 44 * w * Math.sin(t * 3 * Math.PI + p2);
+      else if (type === 'bumps') y += 11 * w * Math.sin(t * 16 * Math.PI);
+      else if (type === 'mountain') y -= 100 * Math.sin(Math.PI * t);
+    }
     return y;
   };
-  // Ramp kickers: linear climb then a sharp drop, so a fast car leaves the
-  // crest still carrying its climb velocity and flies up — into cave roofs
-  // if it's going too fast, or into fun open-air jumps outside them.
-  const ramps = [];
-  for (const z of CAVE_ZONES_TEMPLATE) {
-    const len = z.end - z.start;
-    ramps.push({ x: z.start + len * 0.28, L: 110, H: 50 });
-    ramps.push({ x: z.start + len * 0.62, L: 110, H: 50 });
-  }
-  ramps.push({ x: 1500, L: 170, H: 70 });  // open-air jump ramps
-  ramps.push({ x: 4000, L: 170, H: 70 });
-  ramps.push({ x: 6100, L: 170, H: 70 });
   const ground = (x) => {
-    let y = groundBase(x);
+    let y = shape(x);
     for (const r of ramps) {
       const u = x - r.x;
       if (u > 0 && u < r.L) y -= r.H * (u / r.L);
     }
     return y;
   };
-  // cave roof: canvas y of the ceiling (or -Infinity meaning "open sky").
-  // Hangs from the smooth base line so floor bumps pinch the gap.
   const ceiling = (x) => {
-    for (const z of CAVE_ZONES_TEMPLATE) {
-      const fadeIn = (x - z.start) / 130;
-      const fadeOut = (z.end - x) / 130;
-      const t = Math.min(fadeIn, fadeOut);
-      if (t > 0) {
-        const clear = CAVE_CLEARANCE + Math.max(0, (1 - t)) * 320;
-        return groundBase(x) - clear;
-      }
+    for (const z of caves) {
+      const t = Math.min((x - z.start) / 130, (z.end - x) / 130);
+      if (t > 0) return shape(x) - (CAVE_CLEARANCE + Math.max(0, 1 - t) * 320);
     }
     return -Infinity;
   };
-  const inCave = (x) => CAVE_ZONES_TEMPLATE.some(z => x > z.start && x < z.end);
-  terra = { ground, groundBase, ceiling, inCave };
+  const inCave = (x) => caves.some(z => x > z.start && x < z.end);
+  return { segments, length, caves, ramps, ground, ceiling, inCave };
 }
 
 function groundPose(x) {
@@ -254,34 +299,74 @@ let viewScale = 1;
 
 let race = null;
 
-function makeCoins() {
+function makeCoins(track) {
   const coins = [];
-  for (let x = 800; x < TRACK_LENGTH - 300; x += 420 + Math.random() * 260) {
-    // keep coins out of caves so they don't overlap the rock roof
-    if (CAVE_ZONES_TEMPLATE.some(z => x + 160 > z.start - 150 && x < z.end + 150)) continue;
-    for (let i = 0; i < 3; i++) {
-      const cx = x + i * 55;
-      coins.push({ x: cx, y: terra.ground(cx) - 85, got: false });
+  track.segments.forEach((type, i) => {
+    const s0 = START_PAD + i * SEG_LEN;
+    if (type === 'cave') return;
+    if (type === 'coins') {
+      // a generous wavy line of coins across the whole segment
+      for (let k = 0; k < 10; k++) {
+        const cx = s0 + 90 + k * 78;
+        coins.push({ x: cx, y: track.ground(cx) - 75 - 30 * Math.abs(Math.sin(k * 0.9)), got: false });
+      }
+    } else if (type === 'jump') {
+      // coins along the flight path after the ramp crest
+      const crestX = s0 + 370 + 168;
+      const crestY = track.ground(crestX);
+      for (let k = 0; k < 4; k++) {
+        coins.push({ x: crestX + 60 + k * 75, y: crestY - 45 + k * 16, got: false });
+      }
+    } else if (Math.random() < 0.45) {
+      const cx = s0 + 330 + Math.random() * 200;
+      for (let k = 0; k < 3; k++) {
+        coins.push({ x: cx + k * 55, y: track.ground(cx + k * 55) - 85, got: false });
+      }
     }
-  }
+  });
   return coins;
 }
 function makeOpponents() {
+  const mult = currentDifficulty().oppMult;
   return OPP_BASE_SPEED.map((sp, i) => ({
     name: OPP_NAMES[i],
-    speed: sp * (0.95 + Math.random() * 0.12),
+    speed: sp * mult * (0.95 + Math.random() * 0.12),
     design: { body: i === 2 ? 'sporty' : i === 1 ? 'sedan' : 'truck', colors: { body: OPP_COLORS[i], accent: '#ffffff', window: '#111' }, decal: 'stripe', spoiler: i === 2 },
   }));
 }
 
-function initRace() {
-  buildTerrain();
+// Set by the builder screen before launching a race on a custom track.
+let pendingSegments = null;
+let currentSegments = null;
+let currentCustom = false;
+function startCustomRace(segs) {
+  pendingSegments = segs.slice();
+  showScreen('race');
+}
+
+// keepTrack=true reuses the last track (retry / race again);
+// otherwise every race gets a freshly generated one.
+function initRace(keepTrack) {
+  if (pendingSegments) {
+    currentSegments = pendingSegments;
+    currentCustom = true;
+    pendingSegments = null;
+  } else if (!(keepTrack && currentSegments)) {
+    currentSegments = randomSegments();
+    currentCustom = false;
+  }
+  const track = buildTrack(currentSegments);
+  terra = track;
+  const hearts = currentDifficulty().hearts;
   const startPose = groundPose(200);
   race = {
+    track,
+    customTrack: currentCustom,
+    maxHearts: hearts,
     state: 'countdown', // countdown | running | paused | crashed | finished
     countdownVal: 3,
     countdownTimer: 0,
-    hearts: 3,
+    hearts,
     coins: 0,
     elapsed: 0,
     car: {
@@ -291,13 +376,13 @@ function initRace() {
       stunTimer: 0, bonkCooldown: 0,
     },
     camX: 0, camY: 0, camInit: false,
-    coinsList: makeCoins(),
+    coinsList: makeCoins(track),
     opponents: makeOpponents(),
     input: { gas: false, brake: false },
     flash: 0,
-    caveWarned: CAVE_ZONES_TEMPLATE.map(() => false),
-    caveEntryHearts: CAVE_ZONES_TEMPLATE.map(() => null),
-    cavePraised: CAVE_ZONES_TEMPLATE.map(() => false),
+    caveWarned: track.caves.map(() => false),
+    caveEntryHearts: track.caves.map(() => null),
+    cavePraised: track.caves.map(() => false),
   };
   document.getElementById('pause-overlay').classList.add('hidden');
   document.getElementById('result-overlay').classList.add('hidden');
@@ -318,7 +403,8 @@ function startCountdown() {
 }
 
 function updateHearts() {
-  document.getElementById('hearts').textContent = '❤️'.repeat(Math.max(race.hearts, 0)) + '🖤'.repeat(3 - Math.max(race.hearts, 0));
+  const h = Math.max(race.hearts, 0);
+  document.getElementById('hearts').textContent = '❤️'.repeat(h) + '🖤'.repeat(race.maxHearts - h);
 }
 function updateCoins() {
   document.getElementById('coin-count').textContent = '🪙 ' + race.coins;
@@ -499,7 +585,7 @@ function updateRace(dt) {
   car.wheelSpin += (car.vx / WHEEL_R) * dt;
 
   // spoken cave coaching: warn before, praise a clean pass
-  CAVE_ZONES_TEMPLATE.forEach((z, i) => {
+  race.track.caves.forEach((z, i) => {
     if (!race.caveWarned[i] && car.x > z.start - 600 && car.x < z.start) {
       race.caveWarned[i] = true;
       race.caveEntryHearts[i] = race.hearts;
@@ -524,7 +610,7 @@ function updateRace(dt) {
   if (race.flash > 0) race.flash = Math.max(0, race.flash - dt * 3);
 
   // finish
-  if (car.x >= TRACK_LENGTH && race.state === 'running') {
+  if (car.x >= race.track.length && race.state === 'running') {
     race.state = 'finished';
     finishRace();
   }
@@ -532,7 +618,7 @@ function updateRace(dt) {
 
 function finishRace() {
   const results = [{ name: 'You', time: race.elapsed, isPlayer: true }];
-  race.opponents.forEach(o => results.push({ name: o.name, time: TRACK_LENGTH / o.speed, isPlayer: false }));
+  race.opponents.forEach(o => results.push({ name: o.name, time: race.track.length / o.speed, isPlayer: false }));
   results.sort((a, b) => a.time - b.time);
   const place = results.findIndex(r => r.isPlayer) + 1;
   setTimeout(() => showFinishOverlay(place), 500);
@@ -599,7 +685,7 @@ function renderRace() {
   rctx.stroke();
 
   // caves
-  for (const z of CAVE_ZONES_TEMPLATE) {
+  for (const z of race.track.caves) {
     if (z.end < x0 || z.start > x1) continue;
     const cx0 = Math.max(x0, z.start - 140);
     const cx1 = Math.min(x1, z.end + 140);
@@ -662,14 +748,15 @@ function renderRace() {
   }
 
   // finish line
-  if (TRACK_LENGTH > x0 && TRACK_LENGTH < x1 + 300) {
-    const gy = terra.ground(TRACK_LENGTH);
+  const FIN = race.track.length;
+  if (FIN > x0 && FIN < x1 + 300) {
+    const gy = terra.ground(FIN);
     rctx.fillStyle = '#333';
-    rctx.fillRect(TRACK_LENGTH - 3, gy - 170, 6, 170);
+    rctx.fillRect(FIN - 3, gy - 170, 6, 170);
     for (let r = 0; r < 3; r++) {
       for (let c = 0; c < 5; c++) {
         rctx.fillStyle = (r + c) % 2 ? '#111' : '#fff';
-        rctx.fillRect(TRACK_LENGTH + 3 + c * 14, gy - 170 + r * 14, 14, 14);
+        rctx.fillRect(FIN + 3 + c * 14, gy - 170 + r * 14, 14, 14);
       }
     }
   }
@@ -689,7 +776,7 @@ function renderRace() {
 
   // opponents
   for (const o of race.opponents) {
-    const ox = Math.min(o.speed * race.elapsed, TRACK_LENGTH + 100);
+    const ox = Math.min(o.speed * race.elapsed, race.track.length + 100);
     if (ox < x0 - 100 || ox > x1 + 100) continue;
     const pose = groundPose(ox);
     drawCar(rctx, o.design, ox, pose.y, CAR_SCALE * 0.95, pose.slope, (ox / WHEEL_R));
@@ -714,9 +801,9 @@ function renderRace() {
   document.getElementById('flash-overlay').style.opacity = race.flash * 0.5;
 
   // HUD progress markers
-  document.getElementById('marker-player').style.left = Math.min(100, (car.x / TRACK_LENGTH) * 100) + '%';
+  document.getElementById('marker-player').style.left = Math.min(100, (car.x / race.track.length) * 100) + '%';
   race.opponents.forEach((o, i) => {
-    const pct = Math.min(100, ((o.speed * race.elapsed) / TRACK_LENGTH) * 100);
+    const pct = Math.min(100, ((o.speed * race.elapsed) / race.track.length) * 100);
     document.getElementById('marker-opp' + i).style.left = pct + '%';
   });
 }
@@ -732,7 +819,7 @@ function showCrashOverlay() {
   document.getElementById('result-overlay').classList.remove('hidden');
   SFX.lose();
   Speech.say("Oh no! Let's try again!");
-  document.getElementById('btn-retry').addEventListener('click', () => { SFX.click(); initRace(); });
+  document.getElementById('btn-retry').addEventListener('click', () => { SFX.click(); initRace(true); });
   document.getElementById('btn-result-home').addEventListener('click', () => { SFX.click(); showScreen('title'); });
 }
 
@@ -770,6 +857,7 @@ function showFinishOverlay(place) {
   panel.innerHTML = bodyHtml + `
     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
       <button id="btn-race-again" class="big-btn">🔄 Race Again</button>
+      ${race.customTrack ? '<button id="btn-result-build" class="big-btn orange">🧱 Build Again</button>' : ''}
       <button id="btn-result-garage" class="big-btn blue">🚗 Garage</button>
       <button id="btn-result-home" class="big-btn gray">🏠 Home</button>
     </div>
@@ -784,7 +872,9 @@ function showFinishOverlay(place) {
       if (unlocked) drawCar(cctx, unlocked, 80, 78, 2.2, 0, 0);
     }
   }
-  document.getElementById('btn-race-again').addEventListener('click', () => { SFX.click(); initRace(); });
+  document.getElementById('btn-race-again').addEventListener('click', () => { SFX.click(); initRace(true); });
+  const buildBtn = document.getElementById('btn-result-build');
+  if (buildBtn) buildBtn.addEventListener('click', () => { SFX.click(); showScreen('build'); });
   document.getElementById('btn-result-garage').addEventListener('click', () => { SFX.click(); showScreen('garage'); });
   document.getElementById('btn-result-home').addEventListener('click', () => { SFX.click(); showScreen('title'); });
 }
