@@ -15,6 +15,7 @@
     <button id="btn-play" class="big-btn">▶ RACE</button>
     <button id="btn-listen" class="big-btn orange">👂 LISTEN &amp; FIND</button>
     <button id="btn-build" class="big-btn purple">🧱 BUILD A TRACK</button>
+    <button id="btn-workshop" class="big-btn red">🔧 WORKSHOP <span id="title-wallet">🪙 0</span></button>
     <button id="btn-garage" class="big-btn blue">🚗 GARAGE (<span id="garage-count">0/0</span>)</button>
     <div id="difficulty-row">
       <button class="diff-btn" data-diff="easy">🐢<span>EASY</span></button>
@@ -56,6 +57,22 @@
       <button id="btn-build-race" class="big-btn">🏁 RACE MY TRACK!</button>
       <button id="btn-build-share" class="big-btn blue">📤 SHARE</button>
     </div>
+  </section>
+
+  <section id="screen-workshop" class="screen">
+    <div id="shop-hud">
+      <button id="btn-shop-back" class="mini-btn">⬅</button>
+      <h2>🔧 Workshop</h2>
+      <div id="shop-wallet">🪙 0</div>
+    </div>
+    <div id="shop-preview"><canvas id="shop-car-canvas"></canvas></div>
+    <div id="shop-tabs">
+      <button class="shop-tab selected" data-cat="engines">🚀<span>ENGINE</span></button>
+      <button class="shop-tab" data-cat="tyres">🛞<span>TYRES</span></button>
+      <button class="shop-tab" data-cat="drivers">🙂<span>DRIVER</span></button>
+      <button class="shop-tab" data-cat="hats">🎩<span>HATS</span></button>
+    </div>
+    <div id="shop-grid"></div>
   </section>
 
   <div id="grownups-overlay" class="overlay hidden">
@@ -121,5 +138,6 @@
 <script src="js/game.js"></script>
 <script src="js/listen.js"></script>
 <script src="js/builder.js"></script>
+<script src="js/workshop.js"></script>
 </body>
 </html>

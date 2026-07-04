@@ -1,7 +1,15 @@
 // ===================== Save data =====================
 const STORAGE_KEY = 'twr_save_v1';
 function defaultSave() {
-  return { unlocked: [CAR_DESIGNS[0].id, CAR_DESIGNS[1].id], selected: CAR_DESIGNS[0].id, wins: 0, difficulty: 'easy' };
+  return {
+    unlocked: [CAR_DESIGNS[0].id, CAR_DESIGNS[1].id],
+    selected: CAR_DESIGNS[0].id,
+    wins: 0,
+    difficulty: 'easy',
+    coins: 0,
+    gear: { engine: 1, tyres: 'normal', driver: 'max', hat: 'none' },
+    owned: { engines: [1], tyres: ['normal'], drivers: ['max', 'mia'], hats: ['none', 'cap'] },
+  };
 }
 function loadSave() {
   try {
@@ -14,6 +22,9 @@ let save = loadSave();
 function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(save)); }
 
 function getDesign(id) { return CAR_DESIGNS.find(c => c.id === id) || CAR_DESIGNS[0]; }
+function playerEquip(boost) {
+  return { tyres: save.gear.tyres, driver: save.gear.driver, hat: save.gear.hat, boost: !!boost };
+}
 function isUnlocked(id) { return save.unlocked.includes(id); }
 function unlockNext() {
   const next = CAR_DESIGNS.find(c => !save.unlocked.includes(c.id));
@@ -28,6 +39,7 @@ const screens = {
   race: document.getElementById('screen-race'),
   listen: document.getElementById('screen-listen'),
   build: document.getElementById('screen-build'),
+  workshop: document.getElementById('screen-workshop'),
 };
 let currentScreen = 'title';
 function showScreen(name) {
@@ -38,6 +50,7 @@ function showScreen(name) {
   if (name === 'race') initRace();
   if (name === 'listen' && window.initListen) window.initListen();
   if (name === 'build' && window.initBuild) window.initBuild();
+  if (name === 'workshop' && window.initWorkshop) window.initWorkshop();
 }
 
 // ===================== Title screen =====================
@@ -52,12 +65,15 @@ function renderTitle() {
   tctx.clearRect(0, 0, w, h);
   const design = getDesign(save.selected);
   const s = Math.min(w / 70, h / 48);
-  drawCar(tctx, design, w / 2, h / 2 + 14 * s, s, 0, 0);
+  drawCar(tctx, design, w / 2, h / 2 + 14 * s, s, 0, 0, playerEquip(false));
+  const wallet = document.getElementById('title-wallet');
+  if (wallet) wallet.textContent = '🪙 ' + save.coins;
 }
 document.getElementById('btn-play').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('race'); });
 document.getElementById('btn-garage').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('garage'); });
 document.getElementById('btn-listen').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('listen'); });
 document.getElementById('btn-build').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('build'); });
+document.getElementById('btn-workshop').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('workshop'); });
 
 // difficulty picker
 function renderDifficulty() {
@@ -156,7 +172,7 @@ function renderGarage() {
       const cctx = canvas.getContext('2d');
       cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const s = Math.min(w / 68, h / 46);
-      if (unlocked) drawCar(cctx, design, w / 2, h / 2 + 12 * s, s, 0, 0);
+      if (unlocked) drawCar(cctx, design, w / 2, h / 2 + 12 * s, s, 0, 0, design.id === save.selected ? playerEquip(false) : null);
       else drawLockedCar(cctx, design, w / 2, h / 2 + 12 * s, s);
     });
 
@@ -400,10 +416,16 @@ function initRace(keepTrack) {
   terra = track;
   const hearts = currentDifficulty().hearts;
   const startPose = groundPose(200);
+  const engine = gearItem('engines', save.gear.engine);
+  const tyres = gearItem('tyres', save.gear.tyres);
   race = {
     track,
     customTrack: currentCustom,
     maxHearts: hearts,
+    maxSpeed: MAX_SPEED * engine.speed * tyres.speed,
+    accel: ACCEL * engine.speed,
+    slopeK: tyres.slope,
+    engineLevel: engine.id,
     state: 'countdown', // countdown | running | paused | crashed | finished
     countdownVal: 3,
     countdownTimer: 0,
@@ -571,12 +593,12 @@ function updateRace(dt) {
   if (car.grounded) {
     const pose = groundPose(car.x);
     // pedals (extra torque at low speed so steep climbs never trap the car)
-    if (canDrive && inp.gas) car.vx += ACCEL * (car.vx < 220 ? 1.8 : 1) * dt;
+    if (canDrive && inp.gas) car.vx += race.accel * (car.vx < 220 ? 1.8 : 1) * dt;
     if (canDrive && inp.brake) car.vx -= BRAKE_DECEL * dt;
-    // gravity along the slope + rolling drag
-    car.vx += GRAVITY * Math.sin(pose.slope) * dt * 0.6;
+    // gravity along the slope (tyre grip reduces it) + rolling drag
+    car.vx += GRAVITY * Math.sin(pose.slope) * dt * race.slopeK;
     car.vx *= Math.max(0, 1 - 0.28 * dt);
-    car.vx = Math.min(MAX_SPEED, Math.max(REVERSE_MAX, car.vx));
+    car.vx = Math.min(race.maxSpeed, Math.max(REVERSE_MAX, car.vx));
 
     const prevY = car.y;
     car.x += car.vx * dt;
@@ -839,7 +861,8 @@ function renderRace() {
 
   // player car
   const design = getDesign(save.selected);
-  drawCar(rctx, design, car.x, car.y, CAR_SCALE, car.angle, car.wheelSpin);
+  const boosting = race.state === 'running' && race.input.gas && race.engineLevel >= 2;
+  drawCar(rctx, design, car.x, car.y, CAR_SCALE, car.angle, car.wheelSpin, playerEquip(boosting));
   // speed dust when grounded and fast
   if (car.grounded && car.vx > 300) {
     rctx.fillStyle = 'rgba(180, 150, 110, 0.5)';
@@ -865,9 +888,12 @@ function renderRace() {
 
 // ===================== Overlays: crash / finish =====================
 function showCrashOverlay() {
+  save.coins += race.coins;
+  persist();
   const panel = document.getElementById('result-panel');
   panel.innerHTML = `
     <h2>💥 Oh no! Let's try again!</h2>
+    ${race.coins ? `<p style="font-size:18px;color:#b07d00;font-weight:700;">You kept your 🪙 ${race.coins} coins!</p>` : ''}
     <button id="btn-retry" class="big-btn">🔄 Try Again</button>
     <button id="btn-result-home" class="big-btn gray">🏠 Home</button>
   `;
@@ -879,6 +905,8 @@ function showCrashOverlay() {
 }
 
 function showFinishOverlay(place) {
+  save.coins += race.coins;
+  persist();
   const panel = document.getElementById('result-panel');
   const suffix = place === 1 ? 'st' : place === 2 ? 'nd' : place === 3 ? 'rd' : 'th';
   let bodyHtml = '';
@@ -908,7 +936,7 @@ function showFinishOverlay(place) {
     SFX.lose();
     Speech.say('Good try! Race again and win a new car!');
   }
-  bodyHtml += `<p style="font-size:18px;color:#b07d00;font-weight:700;">🪙 Coins collected: ${race.coins}</p>`;
+  bodyHtml += `<p style="font-size:18px;color:#b07d00;font-weight:700;">🪙 +${race.coins} coins · You have ${save.coins} — spend them in the Workshop!</p>`;
   panel.innerHTML = bodyHtml + `
     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
       <button id="btn-race-again" class="big-btn">🔄 Race Again</button>

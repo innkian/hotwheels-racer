@@ -16,7 +16,7 @@ html, body {
 .screen.active { display: flex; }
 
 /* ---------- Title ---------- */
-#screen-title { justify-content: center; gap: 18px; padding: 20px; }
+#screen-title { justify-content: center; gap: 10px; padding: 12px; }
 .logo {
   font-size: clamp(28px, 7vw, 56px);
   color: #ff3b30;
@@ -25,7 +25,7 @@ html, body {
   text-align: center;
   letter-spacing: 1px;
 }
-.title-car-display { width: min(70vw, 260px); height: min(35vw, 140px); }
+.title-car-display { width: min(60vw, 220px); height: min(24vw, 96px); }
 .title-car-display canvas { width: 100%; height: 100%; }
 
 /* ---------- Buttons ---------- */
@@ -116,6 +116,68 @@ html, body {
   text-align: center; font-weight: 800; font-size: 14px; color: #1d3557; margin-top: 4px;
 }
 #build-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+/* ---------- Workshop ---------- */
+#title-wallet {
+  font-size: 14px; background: rgba(255, 214, 10, 0.9); color: #7a5c00;
+  border-radius: 10px; padding: 2px 8px; margin-left: 6px;
+}
+#screen-workshop { padding: 12px; gap: 10px; }
+#shop-hud {
+  width: 100%; max-width: 920px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+#shop-hud h2 { margin: 0; color: #1d3557; font-size: clamp(18px, 4vw, 28px); }
+#shop-wallet {
+  font-size: 20px; font-weight: 800; color: #7a5c00;
+  background: rgba(255, 214, 10, 0.75);
+  border-radius: 12px; padding: 6px 14px;
+}
+#shop-preview {
+  width: 100%; max-width: 920px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 16px;
+}
+#shop-car-canvas { width: 100%; height: 110px; display: block; }
+#shop-tabs { display: flex; gap: 10px; width: 100%; max-width: 920px; }
+.shop-tab {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 24px; font-weight: 800;
+  background: rgba(255,255,255,0.55);
+  border: 4px solid transparent; border-radius: 14px;
+  padding: 8px 4px; cursor: pointer;
+}
+.shop-tab span { font-size: 12px; color: #1d3557; }
+.shop-tab.selected { border-color: #e63946; background: #ffe3e5; }
+#shop-grid {
+  flex: 1; width: 100%; max-width: 920px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  align-content: start;
+  overflow-y: auto;
+}
+.shop-item {
+  position: relative;
+  background: rgba(255,255,255,0.92);
+  border-radius: 16px;
+  border: 4px solid transparent;
+  padding: 10px 8px 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.1s;
+}
+.shop-item:active { transform: scale(0.95); }
+.shop-item.equipped { border-color: #2a9d4f; background: #d8f3dc; }
+.shop-item.locked { opacity: 0.85; }
+.shop-item canvas { width: 100%; height: 62px; display: block; }
+.shop-item-name { font-weight: 800; font-size: 14px; color: #1d3557; margin-top: 4px; }
+.shop-item-tag {
+  margin-top: 3px; font-size: 13px; font-weight: 800;
+  color: #7a5c00;
+}
+.shop-item.equipped .shop-item-tag { color: #2a9d4f; }
 .mini-btn {
   font-size: 15px; font-weight: 700; color: #1d3557;
   background: rgba(255,255,255,0.7);

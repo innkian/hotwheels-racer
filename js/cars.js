@@ -44,15 +44,50 @@ function describeCar(design) {
   return s + '.';
 }
 
+// ===================== Workshop gear catalog =====================
+// Every item has a spoken line that names it AND explains what it does —
+// cause-and-effect language ("faster", "climbs hills") is the learning bit.
+const GEAR_CATALOG = {
+  engines: [
+    { id: 1, name: 'STANDARD', icon: '⚙️', price: 0,  speed: 1,    say: 'Standard engine. It goes nice and steady.' },
+    { id: 2, name: 'TURBO',    icon: '🌀', price: 30, speed: 1.08, say: 'Turbo engine! It makes your car go faster!' },
+    { id: 3, name: 'ROCKET',   icon: '🚀', price: 60, speed: 1.16, say: 'Rocket engine! Super duper fast! Be extra careful in the caves!' },
+  ],
+  tyres: [
+    { id: 'normal',  name: 'NORMAL',  price: 0,  speed: 1,    slope: 0.6,  wheelMult: 1,    say: 'Normal tyres. Good for everywhere.' },
+    { id: 'monster', name: 'MONSTER', price: 25, speed: 0.96, slope: 0.42, wheelMult: 1.3,  say: 'Monster tyres! Big and bouncy! They climb big hills really well!' },
+    { id: 'speedy',  name: 'SPEEDY',  price: 25, speed: 1.06, slope: 0.68, wheelMult: 0.92, say: 'Speedy tyres! Zoom! They are the fastest on flat roads!' },
+  ],
+  drivers: [
+    { id: 'max',   name: 'MAX',   price: 0,  say: 'Max is driving! Hi Max!' },
+    { id: 'mia',   name: 'MIA',   price: 0,  say: 'Mia is driving! Hi Mia!' },
+    { id: 'rex',   name: 'REX',   price: 20, say: 'Rex the green dinosaur is driving! Roar!' },
+    { id: 'robo',  name: 'ROBO',  price: 20, say: 'Robo the robot is driving! Beep beep boop!' },
+    { id: 'astro', name: 'ASTRO', price: 20, say: 'Astro the astronaut is driving! Three, two, one, blast off!' },
+    { id: 'puppy', name: 'PUPPY', price: 20, say: 'Puppy is driving! Woof woof!' },
+  ],
+  hats: [
+    { id: 'none',   name: 'NO HAT',  price: 0,  say: 'No hat today!' },
+    { id: 'cap',    name: 'CAP',     price: 0,  say: 'A red cap! Looking cool!' },
+    { id: 'helmet', name: 'HELMET',  price: 10, say: 'A blue racing helmet! Safety first!' },
+    { id: 'party',  name: 'PARTY',   price: 10, say: 'A party hat! Hooray! It is a race party!' },
+    { id: 'cowboy', name: 'COWBOY',  price: 12, say: 'A cowboy hat! Yee-haw!' },
+    { id: 'crown',  name: 'CROWN',   price: 15, say: 'A golden crown! You are the king of the race!' },
+  ],
+};
+function gearItem(cat, id) {
+  return GEAR_CATALOG[cat].find(i => i.id === id) || GEAR_CATALOG[cat][0];
+}
+
 // Geometry in "car units": axle line is y=0, car faces +x (right).
 // Wheels sit at x = -18 and +18. A car is ~56 units long.
+// head = where the driver's head shows through the window.
 const BODY_GEOM = {
-  //           wheel radius, body outline builder
-  sedan:  { wheelR: 9 },
-  sporty: { wheelR: 8.5 },
-  muscle: { wheelR: 9 },
-  truck:  { wheelR: 12 },
-  buggy:  { wheelR: 10 },
+  sedan:  { wheelR: 9,   head: { x: -3, y: -18, r: 4.6 } },
+  sporty: { wheelR: 8.5, head: { x: -2, y: -17, r: 4.2 } },
+  muscle: { wheelR: 9,   head: { x: -5, y: -17, r: 4.2 } },
+  truck:  { wheelR: 12,  head: { x: 1,  y: -24, r: 4.8 } },
+  buggy:  { wheelR: 10,  head: { x: -1, y: -16, r: 5.2 } },
 };
 
 function bodyPath(body) {
@@ -135,6 +170,109 @@ function drawStar(ctx, cx, cy, r) {
   ctx.fill();
 }
 
+// Driver heads — a few shapes each, readable even at small sizes.
+function drawDriverHead(ctx, x, y, r, driver) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (driver === 'robo') {
+    ctx.fillStyle = '#aeb8c2';
+    ctx.beginPath();
+    ctx.roundRect(-r, -r, r * 2, r * 2, r * 0.3);
+    ctx.fill();
+    ctx.strokeStyle = '#6c757d'; ctx.lineWidth = r * 0.18;
+    ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(0, -r * 1.6); ctx.stroke();
+    ctx.fillStyle = '#e63946';
+    ctx.beginPath(); ctx.arc(0, -r * 1.7, r * 0.25, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#00f5d4';
+    ctx.fillRect(r * 0.05, -r * 0.4, r * 0.6, r * 0.45);
+  } else if (driver === 'rex') {
+    ctx.fillStyle = '#57a639';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2f6b1a';
+    for (let i = 0; i < 3; i++) {
+      const a = -Math.PI / 2 + (i - 1) * 0.55;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - 0.18) * r, Math.sin(a - 0.18) * r);
+      ctx.lineTo(Math.cos(a + 0.18) * r, Math.sin(a + 0.18) * r);
+      ctx.lineTo(Math.cos(a) * r * 1.5, Math.sin(a) * r * 1.5);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(r * 0.35, -r * 0.15, r * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(r * 0.42, -r * 0.15, r * 0.14, 0, Math.PI * 2); ctx.fill();
+  } else if (driver === 'astro') {
+    ctx.fillStyle = '#f4f4f4';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2b6cff';
+    ctx.beginPath();
+    ctx.roundRect(-r * 0.35, -r * 0.45, r * 1.25, r * 0.85, r * 0.3);
+    ctx.fill();
+  } else if (driver === 'puppy') {
+    ctx.fillStyle = '#b5793b';
+    ctx.beginPath(); ctx.ellipse(-r * 0.75, -r * 0.75, r * 0.35, r * 0.6, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(r * 0.55, -r * 0.85, r * 0.35, r * 0.6, 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d9a05f';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(r * 0.35, -r * 0.15, r * 0.15, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.75, r * 0.25, r * 0.2, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // max / mia — kid faces
+    ctx.fillStyle = '#f1c27d';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = driver === 'mia' ? '#5b3a1a' : '#3a2412';
+    ctx.beginPath(); ctx.arc(0, -r * 0.25, r, Math.PI, Math.PI * 2); ctx.fill();
+    if (driver === 'mia') {
+      ctx.beginPath(); ctx.arc(-r * 0.95, r * 0.1, r * 0.38, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(r * 0.95, r * 0.1, r * 0.38, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(r * 0.4, 0, r * 0.14, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Hats sit on top of a head of radius r centered at (x, y).
+function drawHat(ctx, x, y, r, hat) {
+  if (!hat || hat === 'none') return;
+  ctx.save();
+  ctx.translate(x, y - r * 0.75);
+  if (hat === 'cap') {
+    ctx.fillStyle = '#e63946';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.95, Math.PI, Math.PI * 2); ctx.fill();
+    ctx.fillRect(0, -r * 0.15, r * 1.5, r * 0.28);
+  } else if (hat === 'helmet') {
+    ctx.fillStyle = '#2b6cff';
+    ctx.beginPath(); ctx.arc(0, 0.5, r * 1.05, Math.PI, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-r * 0.2, -r * 1.05, r * 0.4, r * 1.0);
+  } else if (hat === 'crown') {
+    ctx.fillStyle = '#ffbf00';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.85, 0);
+    ctx.lineTo(-r * 0.85, -r * 0.9);
+    ctx.lineTo(-r * 0.4, -r * 0.35);
+    ctx.lineTo(0, -r * 1.05);
+    ctx.lineTo(r * 0.4, -r * 0.35);
+    ctx.lineTo(r * 0.85, -r * 0.9);
+    ctx.lineTo(r * 0.85, 0);
+    ctx.closePath(); ctx.fill();
+  } else if (hat === 'party') {
+    ctx.fillStyle = '#ff8fab';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.6, 0); ctx.lineTo(r * 0.6, 0); ctx.lineTo(0, -r * 1.5);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffd60a';
+    ctx.beginPath(); ctx.arc(0, -r * 1.5, r * 0.22, 0, Math.PI * 2); ctx.fill();
+  } else if (hat === 'cowboy') {
+    ctx.fillStyle = '#8d6e4b';
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 1.45, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.75, Math.PI, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawWheel(ctx, x, y, r, spin) {
   ctx.save();
   ctx.translate(x, y);
@@ -161,14 +299,31 @@ function drawWheel(ctx, x, y, r, spin) {
 
 // Draws a side-view car centered on its axle midpoint at (x, y), facing right.
 // angle in radians (0 = flat ground), wheelSpin animates the wheels.
-function drawCar(ctx, design, x, y, scale, angle, wheelSpin) {
+// equip (optional): { tyres, driver, hat, boost } from the workshop.
+function drawCar(ctx, design, x, y, scale, angle, wheelSpin, equip) {
   const geom = BODY_GEOM[design.body] || BODY_GEOM.sedan;
   const c = design.colors;
+  const wheelMult = equip ? gearItem('tyres', equip.tyres).wheelMult : 1;
 
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle || 0);
   ctx.scale(scale, scale);
+  // lift the body so bigger tyres still touch the same ground line
+  ctx.translate(0, -geom.wheelR * (wheelMult - 1));
+
+  // exhaust flame while boosting
+  if (equip && equip.boost) {
+    const flick = 0.6 + 0.4 * Math.abs(Math.sin((wheelSpin || 0) * 3));
+    ctx.fillStyle = '#ff7b00';
+    ctx.beginPath();
+    ctx.moveTo(-28, -10); ctx.lineTo(-28 - 11 * flick, -7); ctx.lineTo(-28, -4);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffd60a';
+    ctx.beginPath();
+    ctx.moveTo(-28, -9); ctx.lineTo(-28 - 6 * flick, -7); ctx.lineTo(-28, -5);
+    ctx.closePath(); ctx.fill();
+  }
 
   // body
   const bp = bodyPath(design.body);
@@ -215,6 +370,12 @@ function drawCar(ctx, design, x, y, scale, angle, wheelSpin) {
   ctx.fillStyle = c.window;
   ctx.fill(windowPath(design.body));
 
+  // driver + hat
+  if (equip && equip.driver) {
+    drawDriverHead(ctx, geom.head.x, geom.head.y, geom.head.r, equip.driver);
+    drawHat(ctx, geom.head.x, geom.head.y - geom.head.r, geom.head.r, equip.hat);
+  }
+
   // spoiler
   if (design.spoiler) {
     ctx.fillStyle = c.accent;
@@ -228,9 +389,10 @@ function drawCar(ctx, design, x, y, scale, angle, wheelSpin) {
   ctx.fillStyle = '#ff6b6b';
   ctx.fillRect(-28, -10, 2.5, 3.5);
 
-  // wheels
-  drawWheel(ctx, -18, 0, geom.wheelR, wheelSpin);
-  drawWheel(ctx, 18, 0, geom.wheelR, wheelSpin);
+  // wheels (context is lifted with the body, so bigger tyres still
+  // touch the same ground line: bottom = -lift + r*mult = r)
+  drawWheel(ctx, -18, 0, geom.wheelR * wheelMult, wheelSpin);
+  drawWheel(ctx, 18, 0, geom.wheelR * wheelMult, wheelSpin);
 
   ctx.restore();
 }
