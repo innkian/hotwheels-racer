@@ -26,6 +26,7 @@ const screens = {
   title: document.getElementById('screen-title'),
   garage: document.getElementById('screen-garage'),
   race: document.getElementById('screen-race'),
+  listen: document.getElementById('screen-listen'),
 };
 let currentScreen = 'title';
 function showScreen(name) {
@@ -34,6 +35,7 @@ function showScreen(name) {
   if (name === 'title') renderTitle();
   if (name === 'garage') renderGarage();
   if (name === 'race') initRace();
+  if (name === 'listen' && window.initListen) window.initListen();
 }
 
 // ===================== Title screen =====================
@@ -52,6 +54,58 @@ function renderTitle() {
 }
 document.getElementById('btn-play').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('race'); });
 document.getElementById('btn-garage').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('garage'); });
+document.getElementById('btn-listen').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('listen'); });
+
+// speech on/off toggle
+const speechToggleBtn = document.getElementById('btn-speech-toggle');
+if (save.speechOff) Speech.enabled = false;
+function renderSpeechToggle() { speechToggleBtn.textContent = Speech.enabled ? '🔊' : '🔇'; }
+renderSpeechToggle();
+speechToggleBtn.addEventListener('click', () => {
+  Speech.enabled = !Speech.enabled;
+  save.speechOff = !Speech.enabled;
+  persist();
+  renderSpeechToggle();
+  SFX.click();
+});
+
+// grown-ups panel (hold to open, so little fingers don't wander in)
+const grownupsBtn = document.getElementById('btn-grownups');
+let holdTimer = null;
+grownupsBtn.addEventListener('pointerdown', () => {
+  holdTimer = setTimeout(showGrownups, 1200);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+  grownupsBtn.addEventListener(ev, () => clearTimeout(holdTimer)));
+
+function showGrownups() {
+  const s = Learning.summary();
+  const bar = (score) => {
+    const pct = score == null ? 0 : Math.round(score * 100);
+    const color = score == null ? '#ccc' : score >= 0.75 ? '#2a9d4f' : score >= 0.5 ? '#ffb703' : '#e63946';
+    return `<div class="mastery-bar"><div style="width:${pct}%;background:${color};"></div></div>`;
+  };
+  const group = (title, items) => `
+    <div class="mastery-group"><h3>${title}</h3>
+    ${items.map(c => `<div class="mastery-row"><span>${c.word}${c.seen === 0 ? ' <small>(not tried)</small>' : ''}</span>${bar(c.seen ? c.score : null)}</div>`).join('')}
+    </div>`;
+  document.getElementById('grownups-panel').innerHTML = `
+    <h2>👪 Progress</h2>
+    <p style="margin:0;color:#1d3557;">Listening level: <b>${s.level} of 4</b> · Correct answers: <b>${s.totalCorrect}</b>${s.recentAccuracy != null ? ` · Recent accuracy: <b>${s.recentAccuracy}%</b>` : ''}</p>
+    ${s.practiceWords.length ? `<p style="margin:0;color:#e63946;font-weight:700;">Words to practice in real life: ${s.practiceWords.join(', ')}</p>` : ''}
+    <div class="mastery-groups">
+      ${group('Colors', s.groups.color)}
+      ${group('Vehicles', s.groups.type)}
+      ${group('Patterns', s.groups.decal)}
+    </div>
+    <p style="font-size:13px;color:#555;margin:0;">Tip: when he wins a car, ask him to tell you its color and name out loud — retelling builds the skills the teacher flagged.</p>
+    <button id="btn-grownups-close" class="big-btn gray">Close</button>
+  `;
+  document.getElementById('grownups-overlay').classList.remove('hidden');
+  document.getElementById('btn-grownups-close').addEventListener('click', () => {
+    document.getElementById('grownups-overlay').classList.add('hidden');
+  });
+}
 
 // ===================== Garage screen =====================
 function renderGarage() {
@@ -87,8 +141,9 @@ function renderGarage() {
     });
 
     card.addEventListener('click', () => {
-      if (!unlocked) { SFX.click(); return; }
+      if (!unlocked) { SFX.click(); Speech.say('Win a race to unlock this car!'); return; }
       save.selected = design.id; persist(); SFX.click();
+      Speech.say(describeCar(design));
       renderGarage();
     });
   });
@@ -240,6 +295,9 @@ function initRace() {
     opponents: makeOpponents(),
     input: { gas: false, brake: false },
     flash: 0,
+    caveWarned: CAVE_ZONES_TEMPLATE.map(() => false),
+    caveEntryHearts: CAVE_ZONES_TEMPLATE.map(() => null),
+    cavePraised: CAVE_ZONES_TEMPLATE.map(() => false),
   };
   document.getElementById('pause-overlay').classList.add('hidden');
   document.getElementById('result-overlay').classList.add('hidden');
@@ -329,6 +387,7 @@ function bonk(pushDown) {
   race.flash = 1;
   updateHearts();
   SFX.crash();
+  if (race.hearts > 0) Speech.say('Ouch! Too fast!');
   if (navigator.vibrate) navigator.vibrate(120);
   car.vx *= 0.35;
   if (pushDown) car.vy = Math.max(car.vy, 160);
@@ -349,6 +408,7 @@ function updateRace(dt) {
       if (race.countdownVal <= 0) {
         txt.textContent = 'GO!';
         SFX.go();
+        Speech.say('GO!');
         document.getElementById('countdown-overlay').classList.add('hidden');
         race.state = 'running';
       } else {
@@ -437,6 +497,19 @@ function updateRace(dt) {
   }
 
   car.wheelSpin += (car.vx / WHEEL_R) * dt;
+
+  // spoken cave coaching: warn before, praise a clean pass
+  CAVE_ZONES_TEMPLATE.forEach((z, i) => {
+    if (!race.caveWarned[i] && car.x > z.start - 600 && car.x < z.start) {
+      race.caveWarned[i] = true;
+      race.caveEntryHearts[i] = race.hearts;
+      Speech.say('Slow down! Cave ahead!');
+    }
+    if (!race.cavePraised[i] && race.caveWarned[i] && car.x > z.end + 50) {
+      race.cavePraised[i] = true;
+      if (race.hearts === race.caveEntryHearts[i]) Speech.say('Great driving!');
+    }
+  });
 
   // coins
   for (const c of race.coinsList) {
@@ -658,6 +731,7 @@ function showCrashOverlay() {
   `;
   document.getElementById('result-overlay').classList.remove('hidden');
   SFX.lose();
+  Speech.say("Oh no! Let's try again!");
   document.getElementById('btn-retry').addEventListener('click', () => { SFX.click(); initRace(); });
   document.getElementById('btn-result-home').addEventListener('click', () => { SFX.click(); showScreen('title'); });
 }
@@ -670,6 +744,7 @@ function showFinishOverlay(place) {
     save.wins += 1;
     const unlocked = unlockNext();
     SFX.win();
+    Speech.say(unlocked ? `You won the race! New car! ${unlocked.name}!` : 'You won the race! You are the champion!');
     if (unlocked) {
       bodyHtml = `
         <h2>🏆 You Won 1st Place!</h2>
@@ -689,6 +764,7 @@ function showFinishOverlay(place) {
       <p style="font-size:18px;color:#1d3557;">Win 1st place to unlock a new car. Try again!</p>
     `;
     SFX.lose();
+    Speech.say('Good try! Race again and win a new car!');
   }
   bodyHtml += `<p style="font-size:18px;color:#b07d00;font-weight:700;">🪙 Coins collected: ${race.coins}</p>`;
   panel.innerHTML = bodyHtml + `

@@ -12,9 +12,35 @@
   <section id="screen-title" class="screen active">
     <h1 class="logo">🏎️ Turbo Wheels Racing</h1>
     <div class="title-car-display"><canvas id="title-canvas"></canvas></div>
-    <button id="btn-play" class="big-btn">▶ PLAY</button>
+    <button id="btn-play" class="big-btn">▶ RACE</button>
+    <button id="btn-listen" class="big-btn orange">👂 LISTEN &amp; FIND</button>
     <button id="btn-garage" class="big-btn blue">🚗 GARAGE (<span id="garage-count">0/0</span>)</button>
+    <div class="title-footer">
+      <button id="btn-speech-toggle" class="mini-btn">🔊</button>
+      <button id="btn-grownups" class="mini-btn">👪 grown-ups</button>
+    </div>
   </section>
+
+  <section id="screen-listen" class="screen">
+    <div id="listen-hud">
+      <button id="btn-listen-back" class="mini-btn">⬅</button>
+      <div id="listen-prompt">…</div>
+      <button id="btn-listen-repeat" class="repeat-btn">🔊</button>
+      <div id="listen-stars">⭐ 0</div>
+    </div>
+    <div id="listen-grid"></div>
+    <div id="listen-unlock" class="overlay hidden">
+      <div class="panel">
+        <h2>🎁 New car earned!</h2>
+        <canvas id="listen-unlock-canvas" width="160" height="120"></canvas>
+        <p id="listen-unlock-name" style="font-size:22px;color:#e63946;font-weight:800;"></p>
+      </div>
+    </div>
+  </section>
+
+  <div id="grownups-overlay" class="overlay hidden">
+    <div class="panel" id="grownups-panel"></div>
+  </div>
 
   <section id="screen-garage" class="screen">
     <h2>My Garage</h2>
@@ -67,6 +93,9 @@
 
 <script src="js/cars.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/speech.js"></script>
+<script src="js/learning.js"></script>
 <script src="js/game.js"></script>
+<script src="js/listen.js"></script>
 </body>
 </html>

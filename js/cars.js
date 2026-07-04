@@ -20,6 +20,30 @@ const CAR_DESIGNS = [
   { id: 'c15', name: 'Rocket Red',   body: 'muscle', colors: { body: '#d00000', accent: '#ffffff', window: '#03071e' }, decal: 'flames',  spoiler: true  },
 ];
 
+// Spoken-word attributes for the listening game. Color words are what a
+// 4-year-old would say, not the exact paint shade.
+const CAR_WORDS = {
+  c01: 'red',  c02: 'yellow', c03: 'green',  c04: 'blue',   c05: 'blue',
+  c06: 'orange', c07: 'purple', c08: 'pink', c09: 'silver', c10: 'gold',
+  c11: 'white', c12: 'purple', c13: 'green', c14: 'blue',   c15: 'red',
+};
+const TYPE_WORDS = { sporty: 'race car', sedan: 'race car', muscle: 'race car', truck: 'truck', buggy: 'buggy' };
+const DECAL_WORDS = { flames: 'flames', stripe: 'stripes', stars: 'stars', camo: 'spots', none: null };
+
+function carWords(design) {
+  return {
+    color: CAR_WORDS[design.id] || 'red',
+    type: TYPE_WORDS[design.body] || 'race car',
+    decal: DECAL_WORDS[design.decal] || null,
+  };
+}
+function describeCar(design) {
+  const w = carWords(design);
+  let s = `${design.name}! A ${w.color} ${w.type}`;
+  if (w.decal) s += ` with ${w.decal}`;
+  return s + '.';
+}
+
 // Geometry in "car units": axle line is y=0, car faces +x (right).
 // Wheels sit at x = -18 and +18. A car is ~56 units long.
 const BODY_GEOM = {
