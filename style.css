@@ -1,0 +1,176 @@
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+html, body {
+  margin: 0; padding: 0; width: 100%; height: 100%;
+  overflow: hidden; background: #0b1d3a;
+  font-family: -apple-system, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  touch-action: none;
+}
+#app { position: fixed; inset: 0; }
+.screen {
+  position: absolute; inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(#7ec8ff 0%, #bfe8ff 55%, #e9c68b 100%);
+}
+.screen.active { display: flex; }
+
+/* ---------- Title ---------- */
+#screen-title { justify-content: center; gap: 18px; padding: 20px; }
+.logo {
+  font-size: clamp(28px, 7vw, 56px);
+  color: #ff3b30;
+  text-shadow: 3px 3px 0 #ffd60a, -2px -2px 0 #1d3557;
+  margin: 0;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.title-car-display { width: min(70vw, 260px); height: min(35vw, 140px); }
+.title-car-display canvas { width: 100%; height: 100%; }
+
+/* ---------- Buttons ---------- */
+.big-btn {
+  font-size: clamp(20px, 5vw, 30px);
+  font-weight: 800;
+  padding: 18px 36px;
+  border: none;
+  border-radius: 20px;
+  color: white;
+  background: #2a9d4f;
+  box-shadow: 0 6px 0 #1d6e37, 0 8px 14px rgba(0,0,0,0.3);
+  cursor: pointer;
+  min-width: 220px;
+  transition: transform 0.05s;
+}
+.big-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #1d6e37; }
+.big-btn.blue { background: #2b6cff; box-shadow: 0 6px 0 #1a44a8, 0 8px 14px rgba(0,0,0,0.3); }
+.big-btn.red { background: #e63946; box-shadow: 0 6px 0 #9e242e, 0 8px 14px rgba(0,0,0,0.3); }
+.big-btn.gray { background: #6c757d; box-shadow: 0 6px 0 #495057, 0 8px 14px rgba(0,0,0,0.3); }
+
+/* ---------- Garage ---------- */
+#screen-garage { padding: 16px; gap: 10px; }
+#screen-garage h2 { color: #1d3557; font-size: clamp(22px,5vw,34px); margin: 6px 0; }
+.garage-grid {
+  flex: 1; width: 100%; max-width: 900px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  overflow-y: auto;
+  padding: 8px;
+}
+.car-card {
+  background: rgba(255,255,255,0.85);
+  border-radius: 16px;
+  padding: 8px;
+  text-align: center;
+  border: 4px solid transparent;
+  cursor: pointer;
+}
+.car-card.selected { border-color: #ffd60a; background: rgba(255, 214, 10, 0.35); }
+.car-card canvas { width: 100%; height: 90px; display: block; }
+.car-card .car-name { font-weight: 700; color: #1d3557; font-size: 14px; margin-top: 4px; }
+.car-card.locked .car-name { color: #6c757d; }
+.car-card .lock-icon { font-size: 22px; }
+
+/* ---------- Race screen ---------- */
+#screen-race { justify-content: flex-start; }
+#race-hud {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  gap: 10px;
+  z-index: 5;
+}
+#hearts { font-size: 26px; min-width: 90px; }
+#race-track-bar { flex: 1; max-width: 500px; }
+.track-line {
+  position: relative;
+  height: 14px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 8px;
+  border: 2px solid #1d3557;
+}
+.marker {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid white;
+}
+.marker.player { background: #ffd60a; z-index: 3; width: 18px; height: 18px; }
+.marker.opp0 { background: #e63946; }
+.marker.opp1 { background: #2b6cff; }
+.marker.opp2 { background: #2a9d4f; }
+.finish-flag { position: absolute; right: -6px; top: -14px; font-size: 18px; }
+#btn-pause {
+  font-size: 22px; background: rgba(255,255,255,0.8); border: none; border-radius: 12px;
+  padding: 6px 12px; cursor: pointer;
+}
+#race-canvas { flex: 1; width: 100%; display: block; touch-action: none; }
+
+#controls {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px 22px;
+  gap: 16px;
+  z-index: 5;
+}
+.pedal {
+  width: min(36vw, 180px); height: min(22vw, 110px);
+  border-radius: 20px;
+  border: none;
+  color: white; font-weight: 800; font-size: clamp(18px, 4vw, 26px);
+  line-height: 1.3;
+  touch-action: none;
+}
+#gas-pedal {
+  width: min(36vw, 180px); height: min(22vw, 110px);
+  border-radius: 20px;
+  border: none;
+  color: white; font-weight: 800; font-size: clamp(18px, 4vw, 26px);
+  line-height: 1.3;
+  touch-action: none;
+  background: #2a9d4f;
+  box-shadow: 0 6px 0 #1d6e37;
+}
+#gas-pedal.pressed { background: #ffb703; box-shadow: 0 2px 0 #b07d00; transform: translateY(4px); }
+#brake-pedal {
+  width: min(36vw, 180px); height: min(22vw, 110px);
+  border-radius: 20px;
+  border: none;
+  color: white; font-weight: 800; font-size: clamp(18px, 4vw, 26px);
+  line-height: 1.3;
+  touch-action: none;
+  background: #e63946;
+  box-shadow: 0 6px 0 #9e242e;
+}
+#brake-pedal.pressed { background: #ff8c42; box-shadow: 0 2px 0 #b05a1d; transform: translateY(4px); }
+.pedal-sub { font-size: 11px; font-weight: 500; opacity: 0.9; }
+#coin-count {
+  font-size: 20px; font-weight: 800; color: #7a5c00;
+  background: rgba(255, 214, 10, 0.65);
+  border-radius: 12px; padding: 4px 10px;
+}
+
+/* ---------- Overlays ---------- */
+.overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 20;
+}
+.overlay.hidden { display: none; }
+#countdown-text {
+  font-size: 140px; font-weight: 900; color: #ffd60a;
+  text-shadow: 4px 4px 0 #e63946;
+}
+.panel {
+  background: #fff; border-radius: 24px; padding: 28px 32px;
+  text-align: center; max-width: 90vw;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+.panel h2 { color: #1d3557; margin: 0; font-size: clamp(22px, 5vw, 32px); }
+.panel canvas { width: 160px; height: 200px; }
+#flash-overlay {
+  position: absolute; inset: 0; background: #ff0000; opacity: 0;
+  pointer-events: none; z-index: 15;
+}

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Turbo Wheels Racing</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <section id="screen-title" class="screen active">
+    <h1 class="logo">🏎️ Turbo Wheels Racing</h1>
+    <div class="title-car-display"><canvas id="title-canvas"></canvas></div>
+    <button id="btn-play" class="big-btn">▶ PLAY</button>
+    <button id="btn-garage" class="big-btn blue">🚗 GARAGE (<span id="garage-count">0/0</span>)</button>
+  </section>
+
+  <section id="screen-garage" class="screen">
+    <h2>My Garage</h2>
+    <div id="garage-grid" class="garage-grid"></div>
+    <button id="btn-garage-back" class="big-btn gray">⬅ Back</button>
+  </section>
+
+  <section id="screen-race" class="screen">
+    <div id="race-hud">
+      <div id="hearts">❤️❤️❤️</div>
+      <div id="coin-count">🪙 0</div>
+      <div id="race-track-bar">
+        <div class="track-line">
+          <div class="marker player" id="marker-player"></div>
+          <div class="marker opp0" id="marker-opp0"></div>
+          <div class="marker opp1" id="marker-opp1"></div>
+          <div class="marker opp2" id="marker-opp2"></div>
+          <div class="finish-flag">🏁</div>
+        </div>
+      </div>
+      <button id="btn-pause">⏸</button>
+    </div>
+
+    <canvas id="race-canvas"></canvas>
+    <div id="flash-overlay"></div>
+
+    <div id="countdown-overlay" class="overlay hidden">
+      <div id="countdown-text">3</div>
+    </div>
+
+    <div id="pause-overlay" class="overlay hidden">
+      <div class="panel">
+        <h2>⏸ Paused</h2>
+        <button id="btn-resume" class="big-btn">▶ Resume</button>
+        <button id="btn-quit" class="big-btn red">🏠 Quit</button>
+      </div>
+    </div>
+
+    <div id="result-overlay" class="overlay hidden">
+      <div class="panel" id="result-panel"></div>
+    </div>
+
+    <div id="controls">
+      <button id="brake-pedal">🛑 SLOW<br><span class="pedal-sub">brake · tip nose down</span></button>
+      <button id="gas-pedal">🚀 GO<br><span class="pedal-sub">gas · tip nose up</span></button>
+    </div>
+  </section>
+
+</div>
+
+<script src="js/cars.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
