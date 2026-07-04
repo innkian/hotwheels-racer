@@ -205,16 +205,37 @@ const SEG_LEN = 900;
 const START_PAD = 500;
 const FINISH_PAD = 400;
 const SEGMENT_TYPES = {
-  road:     { label: 'ROAD',     speak: 'Road!' },
-  hills:    { label: 'HILLS',    speak: 'Hills!' },
-  bumps:    { label: 'BUMPS',    speak: 'Bumpy road!' },
-  jump:     { label: 'JUMP',     speak: 'Big jump!' },
-  mountain: { label: 'MOUNTAIN', speak: 'Big mountain!' },
-  cave:     { label: 'CAVE',     speak: 'Cave! Go slow!' },
-  coins:    { label: 'COINS',    speak: 'Coins!' },
+  road:     { label: 'ROAD',     speak: 'Road!',         code: 'r' },
+  hills:    { label: 'HILLS',    speak: 'Hills!',        code: 'h' },
+  bumps:    { label: 'BUMPS',    speak: 'Bumpy road!',   code: 'b' },
+  jump:     { label: 'JUMP',     speak: 'Big jump!',     code: 'j' },
+  mountain: { label: 'MOUNTAIN', speak: 'Big mountain!', code: 'm' },
+  cave:     { label: 'CAVE',     speak: 'Cave! Go slow!', code: 'c' },
+  coins:    { label: 'COINS',    speak: 'Coins!',        code: 'o' },
 };
 
-function randomSegments() {
+// Track codes for share links: one letter per piece, e.g. "jcmho"
+function encodeTrack(segs) {
+  return segs.map(s => SEGMENT_TYPES[s].code).join('');
+}
+function decodeTrack(code) {
+  const byCode = {};
+  for (const [type, info] of Object.entries(SEGMENT_TYPES)) byCode[info.code] = type;
+  const segs = [...String(code).toLowerCase()].map(ch => byCode[ch]);
+  return segs.length >= 1 && segs.length <= 8 && segs.every(Boolean) ? segs : null;
+}
+
+// Remember recent random tracks so new ones never feel like reruns:
+// generate several candidates and keep the one least similar to anything
+// he's raced lately.
+const RECENT_TRACKS_KEY = 'twr_tracks_recent';
+let recentTracks = [];
+try {
+  const raw = localStorage.getItem(RECENT_TRACKS_KEY);
+  if (raw) recentTracks = JSON.parse(raw);
+} catch (e) {}
+
+function rollSegments() {
   const fun = ['hills', 'bumps', 'jump', 'coins', 'mountain', 'hills', 'jump', 'coins'];
   const segs = [];
   for (let i = 0; i < 8; i++) segs.push(fun[Math.floor(Math.random() * fun.length)]);
@@ -222,6 +243,26 @@ function randomSegments() {
   const spots = [1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - 0.5);
   for (let c = 0; c < currentDifficulty().caves; c++) segs[spots[c]] = 'cave';
   return segs;
+}
+function similarity(a, b) {
+  let same = 0;
+  for (let i = 0; i < a.length; i++) if (a[i] === b[i]) same++;
+  return same / a.length;
+}
+function randomSegments() {
+  let best = null, bestScore = Infinity;
+  for (let tries = 0; tries < 12; tries++) {
+    const candidate = rollSegments();
+    const score = recentTracks.length
+      ? Math.max(...recentTracks.map(r => similarity(candidate, r)))
+      : 0;
+    if (score < bestScore) { bestScore = score; best = candidate; }
+    if (bestScore <= 0.375) break;   // at most 3 of 8 pieces match anything recent
+  }
+  recentTracks.push(best);
+  if (recentTracks.length > 6) recentTracks.shift();
+  localStorage.setItem(RECENT_TRACKS_KEY, JSON.stringify(recentTracks));
+  return best;
 }
 
 // Build a playable track (terrain functions + feature lists) from segments.
@@ -386,6 +427,9 @@ function initRace(keepTrack) {
   };
   document.getElementById('pause-overlay').classList.add('hidden');
   document.getElementById('result-overlay').classList.add('hidden');
+  // dice = "give me a different track" — not offered on tracks he built himself
+  document.getElementById('btn-newtrack').classList.toggle('hidden', currentCustom);
+  document.getElementById('btn-pause-newtrack').classList.toggle('hidden', currentCustom);
   updateHearts();
   updateCoins();
   resizeRaceCanvas();
@@ -462,6 +506,15 @@ function togglePause() {
 document.getElementById('btn-pause').addEventListener('click', () => { SFX.click(); togglePause(); });
 document.getElementById('btn-resume').addEventListener('click', () => { SFX.click(); togglePause(); });
 document.getElementById('btn-quit').addEventListener('click', () => { SFX.click(); showScreen('title'); });
+
+// dice: throw away this track and generate a brand-new one
+function rollNewTrack() {
+  SFX.click();
+  Speech.say("Here's a brand new track!");
+  initRace();   // no keepTrack -> fresh random layout
+}
+document.getElementById('btn-newtrack').addEventListener('click', rollNewTrack);
+document.getElementById('btn-pause-newtrack').addEventListener('click', rollNewTrack);
 
 // ===================== Damage =====================
 function bonk(pushDown) {
@@ -857,7 +910,9 @@ function showFinishOverlay(place) {
   panel.innerHTML = bodyHtml + `
     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
       <button id="btn-race-again" class="big-btn">🔄 Race Again</button>
-      ${race.customTrack ? '<button id="btn-result-build" class="big-btn orange">🧱 Build Again</button>' : ''}
+      ${race.customTrack
+        ? '<button id="btn-result-build" class="big-btn orange">🧱 Build Again</button>'
+        : '<button id="btn-result-newtrack" class="big-btn orange">🎲 New Track</button>'}
       <button id="btn-result-garage" class="big-btn blue">🚗 Garage</button>
       <button id="btn-result-home" class="big-btn gray">🏠 Home</button>
     </div>
@@ -875,6 +930,8 @@ function showFinishOverlay(place) {
   document.getElementById('btn-race-again').addEventListener('click', () => { SFX.click(); initRace(true); });
   const buildBtn = document.getElementById('btn-result-build');
   if (buildBtn) buildBtn.addEventListener('click', () => { SFX.click(); showScreen('build'); });
+  const newTrackBtn = document.getElementById('btn-result-newtrack');
+  if (newTrackBtn) newTrackBtn.addEventListener('click', rollNewTrack);
   document.getElementById('btn-result-garage').addEventListener('click', () => { SFX.click(); showScreen('garage'); });
   document.getElementById('btn-result-home').addEventListener('click', () => { SFX.click(); showScreen('title'); });
 }
@@ -894,3 +951,15 @@ requestAnimationFrame(loop);
 
 // ===================== Init =====================
 renderTitle();
+
+// arriving via a shared track link? race it straight away
+(() => {
+  const code = new URLSearchParams(location.search).get('track');
+  if (!code) return;
+  const segs = decodeTrack(code);
+  history.replaceState(null, '', location.pathname);  // keep the URL clean afterwards
+  if (segs) {
+    pendingSegments = segs;
+    showScreen('race');
+  }
+})();

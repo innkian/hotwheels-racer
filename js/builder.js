@@ -141,6 +141,24 @@
     SFX.go();
     startCustomRace(pieces);
   });
+  document.getElementById('btn-build-share').addEventListener('click', async () => {
+    if (!pieces.length) { Speech.say('Add some pieces first!'); return; }
+    SFX.click();
+    const url = location.origin + location.pathname + '?track=' + encodeTrack(pieces);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Race my track!', text: 'I built a race track for you! 🏁', url });
+        Speech.say('Track sent!');
+      } catch (e) { /* user closed the share sheet */ }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        Speech.say('Link copied! Send it to someone!');
+      } catch (e) {
+        prompt('Copy this link:', url);
+      }
+    }
+  });
 
   window.initBuild = () => {
     renderPalette();
