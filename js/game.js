@@ -430,6 +430,7 @@ function initRace(keepTrack) {
   // dice = "give me a different track" — not offered on tracks he built himself
   document.getElementById('btn-newtrack').classList.toggle('hidden', currentCustom);
   document.getElementById('btn-pause-newtrack').classList.toggle('hidden', currentCustom);
+  document.getElementById('btn-countdown-newtrack').classList.toggle('hidden', currentCustom);
   updateHearts();
   updateCoins();
   resizeRaceCanvas();
@@ -515,6 +516,7 @@ function rollNewTrack() {
 }
 document.getElementById('btn-newtrack').addEventListener('click', rollNewTrack);
 document.getElementById('btn-pause-newtrack').addEventListener('click', rollNewTrack);
+document.getElementById('btn-countdown-newtrack').addEventListener('click', rollNewTrack);
 
 // ===================== Damage =====================
 function bonk(pushDown) {
