@@ -10,11 +10,23 @@
   let category = 'engines';
 
   // which save fields each catalog category maps to
+  // gadgets are toggles (several can be on at once); the rest are single slots
   const SLOTS = {
     engines: { equipped: () => save.gear.engine,  setEquip: v => save.gear.engine = v,  owned: () => save.owned.engines },
     tyres:   { equipped: () => save.gear.tyres,   setEquip: v => save.gear.tyres = v,   owned: () => save.owned.tyres },
     drivers: { equipped: () => save.gear.driver,  setEquip: v => save.gear.driver = v,  owned: () => save.owned.drivers },
     hats:    { equipped: () => save.gear.hat,     setEquip: v => save.gear.hat = v,     owned: () => save.owned.hats },
+    horns:   { equipped: () => save.gear.horn,    setEquip: v => save.gear.horn = v,    owned: () => save.owned.horns },
+    trails:  { equipped: () => save.gear.trail,   setEquip: v => save.gear.trail = v,   owned: () => save.owned.trails },
+    gadgets: {
+      toggle: true,
+      isOn: id => save.gear.gadgets.includes(id),
+      setOn: (id, on) => {
+        save.gear.gadgets = save.gear.gadgets.filter(g => g !== id);
+        if (on) save.gear.gadgets.push(id);
+      },
+      owned: () => save.owned.gadgets,
+    },
   };
 
   function renderWallet() {
@@ -61,7 +73,7 @@
     const slot = SLOTS[category];
     GEAR_CATALOG[category].forEach(item => {
       const owned = slot.owned().includes(item.id);
-      const equipped = slot.equipped() === item.id;
+      const equipped = slot.toggle ? slot.isOn(item.id) : slot.equipped() === item.id;
       const card = document.createElement('div');
       card.className = 'shop-item' + (equipped ? ' equipped' : '') + (owned ? '' : ' locked');
       const canvas = document.createElement('canvas');
@@ -82,17 +94,26 @@
 
   function onTap(item, slot, owned) {
     if (owned) {
-      slot.setEquip(item.id);
+      if (slot.toggle) {
+        const nowOn = !slot.isOn(item.id);
+        slot.setOn(item.id, nowOn);
+        Speech.say(nowOn ? item.say : `${item.name.toLowerCase()} off.`);
+      } else {
+        slot.setEquip(item.id);
+        Speech.say(item.say);
+      }
       persist();
       SFX.click();
-      Speech.say(item.say);
+      if (category === 'horns') SFX.horn(item.id);
     } else if (save.coins >= item.price) {
       save.coins -= item.price;
       slot.owned().push(item.id);
-      slot.setEquip(item.id);
+      if (slot.toggle) slot.setOn(item.id, true);
+      else slot.setEquip(item.id);
       persist();
       SFX.unlockCar();
       Speech.say(`You bought it! ${item.say}`);
+      if (category === 'horns') setTimeout(() => SFX.horn(item.id), 700);
     } else {
       SFX.click();
       Speech.say(`You need ${item.price - save.coins} more coins! Win races and grab coins to get it!`);

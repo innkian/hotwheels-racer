@@ -8,14 +8,21 @@ function defaultSave() {
     difficulty: 'easy',
     coins: 0,
     winProgress: 0,
-    gear: { engine: 1, tyres: 'normal', driver: 'max', hat: 'none' },
-    owned: { engines: [1], tyres: ['normal'], drivers: ['max', 'mia'], hats: ['none', 'cap'] },
+    gear: { engine: 1, tyres: 'normal', driver: 'max', hat: 'none', horn: 'beep', trail: 'none', gadgets: [] },
+    owned: { engines: [1], tyres: ['normal'], drivers: ['max', 'mia'], hats: ['none', 'cap'], gadgets: [], horns: ['beep'], trails: ['none'] },
   };
 }
 function loadSave() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return Object.assign(defaultSave(), JSON.parse(raw));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const s = Object.assign(defaultSave(), parsed);
+      // deep-merge nested objects so older saves gain new gear/owned fields
+      s.gear = Object.assign(defaultSave().gear, parsed.gear || {});
+      s.owned = Object.assign(defaultSave().owned, parsed.owned || {});
+      return s;
+    }
   } catch (e) {}
   return defaultSave();
 }
@@ -465,6 +472,11 @@ function initRace(keepTrack) {
     missiles: [],
     booms: [],
     fireCooldown: 0,
+    particles: [],
+    trailTimer: 0,
+    magnet: save.gear.gadgets.includes('magnet'),
+    shieldCharge: save.gear.gadgets.includes('shield') ? 1 : 0,
+    hornCooldown: 0,
   };
   // FIRE button only for weapon cars (tanks)
   document.getElementById('fire-btn').classList.toggle('hidden', !getDesign(save.selected).weapon);
@@ -535,12 +547,25 @@ const fireEl = document.getElementById('fire-btn');
 fireEl.addEventListener('pointerdown', (e) => { e.preventDefault(); fireMissile(); });
 fireEl.addEventListener('touchstart', (e) => { e.preventDefault(); fireMissile(); }, { passive: false });
 
+// horn — always available, sound depends on the equipped horn
+let hornReadyAt = 0;
+function honk() {
+  if (!race || race.state === 'paused' || race.state === 'crashed') return;
+  if (performance.now() < hornReadyAt) return;
+  hornReadyAt = performance.now() + 450;
+  SFX.horn(save.gear.horn);
+}
+const hornEl = document.getElementById('horn-btn');
+hornEl.addEventListener('pointerdown', (e) => { e.preventDefault(); honk(); });
+hornEl.addEventListener('touchstart', (e) => { e.preventDefault(); honk(); }, { passive: false });
+
 // keyboard (desktop testing)
 window.addEventListener('keydown', (e) => {
   if (!race) return;
   if (e.code === 'ArrowRight' || e.code === 'Space' || e.code === 'ArrowUp') { race.input.gas = true; gasEl.classList.add('pressed'); }
   if (e.code === 'ArrowLeft' || e.code === 'ArrowDown') { race.input.brake = true; brakeEl.classList.add('pressed'); }
   if (e.code === 'KeyF') fireMissile();
+  if (e.code === 'KeyH') honk();
   if (e.code === 'Escape') togglePause();
 });
 window.addEventListener('keyup', (e) => {
@@ -578,6 +603,17 @@ document.getElementById('btn-countdown-newtrack').addEventListener('click', roll
 function bonk(pushDown) {
   const car = race.car;
   if (car.bonkCooldown > 0) return;
+  if (race.shieldCharge > 0) {
+    // the shield eats this hit — no heart lost
+    race.shieldCharge = 0;
+    car.bonkCooldown = 1.4;
+    car.vx *= 0.6;
+    if (pushDown) car.vy = Math.max(car.vy, 160);
+    race.booms.push({ x: car.x, y: car.y - 20, t: 0, blue: true });
+    SFX.click();
+    Speech.say('The shield protected you!');
+    return;
+  }
   car.bonkCooldown = 1.4;
   car.stunTimer = STUN_DURATION;
   race.hearts -= 1;
@@ -732,6 +768,35 @@ function updateRace(dt) {
       if (race.hearts === race.caveEntryHearts[i]) Speech.say('Great driving!');
     }
   });
+
+  // coin magnet pulls nearby coins toward the car
+  if (race.magnet) {
+    for (const c of race.coinsList) {
+      if (c.got) continue;
+      const dx = c.x - car.x, dy = c.y - car.y;
+      if (Math.abs(dx) < 220 && Math.abs(dy) < 180) {
+        c.x -= dx * 5 * dt;
+        c.y -= dy * 5 * dt;
+      }
+    }
+  }
+
+  // trail particles
+  if (race.trailTimer > 0) race.trailTimer -= dt;
+  const trail = save.gear.trail;
+  if (trail !== 'none' && inp.gas && Math.abs(car.vx) > 140 && race.trailTimer <= 0) {
+    race.trailTimer = 0.035;
+    race.particles.push({
+      x: car.x - 42 + (Math.random() - 0.5) * 10,
+      y: car.y - 6 + (Math.random() - 0.5) * 12,
+      t: 0,
+      seed: Math.random(),
+      kind: trail,
+    });
+    if (race.particles.length > 70) race.particles.shift();
+  }
+  for (const p of race.particles) p.t += dt;
+  race.particles = race.particles.filter(p => p.t < 0.8);
 
   // coins
   for (const c of race.coinsList) {
@@ -949,11 +1014,48 @@ function renderRace() {
   for (const b of race.booms) {
     const r = 18 + b.t * 130;
     rctx.globalAlpha = Math.max(0, 1 - b.t * 2);
-    rctx.fillStyle = '#ff7b00';
+    rctx.fillStyle = b.blue ? '#2b6cff' : '#ff7b00';
     rctx.beginPath(); rctx.arc(b.x, b.y, r, 0, Math.PI * 2); rctx.fill();
-    rctx.fillStyle = '#ffd60a';
+    rctx.fillStyle = b.blue ? '#a8dadc' : '#ffd60a';
     rctx.beginPath(); rctx.arc(b.x, b.y, r * 0.55, 0, Math.PI * 2); rctx.fill();
     rctx.globalAlpha = 1;
+  }
+
+  // boost trail particles
+  for (const p of race.particles) {
+    const fade = 1 - p.t / 0.8;
+    rctx.globalAlpha = fade;
+    if (p.kind === 'rainbow') {
+      rctx.fillStyle = `hsl(${(p.seed * 360 + p.t * 90) % 360}, 90%, 60%)`;
+      rctx.beginPath(); rctx.arc(p.x, p.y, 7 + p.t * 6, 0, Math.PI * 2); rctx.fill();
+    } else if (p.kind === 'bubbles') {
+      rctx.strokeStyle = 'rgba(160, 220, 255, 0.95)';
+      rctx.lineWidth = 2.5;
+      rctx.beginPath(); rctx.arc(p.x, p.y - p.t * 55, 5 + p.seed * 6, 0, Math.PI * 2); rctx.stroke();
+    } else if (p.kind === 'stars') {
+      rctx.save();
+      rctx.translate(p.x, p.y - p.t * 20);
+      rctx.rotate(p.seed * 6 + p.t * 5);
+      rctx.fillStyle = '#ffd60a';
+      drawStar(rctx, 0, 0, 6 + p.seed * 4);
+      rctx.restore();
+    } else if (p.kind === 'fire') {
+      rctx.fillStyle = p.seed > 0.5 ? '#ff7b00' : '#ffd60a';
+      rctx.beginPath(); rctx.arc(p.x, p.y - p.t * 45, 8 * fade + 2, 0, Math.PI * 2); rctx.fill();
+    }
+    rctx.globalAlpha = 1;
+  }
+
+  // shield bubble around the car while charged
+  if (race.shieldCharge > 0) {
+    const pulse = 1 + 0.05 * Math.sin(performance.now() / 200);
+    rctx.strokeStyle = 'rgba(43, 108, 255, 0.55)';
+    rctx.fillStyle = 'rgba(43, 108, 255, 0.10)';
+    rctx.lineWidth = 3;
+    rctx.beginPath();
+    rctx.arc(race.car.x, race.car.y - 18, 62 * pulse, 0, Math.PI * 2);
+    rctx.fill();
+    rctx.stroke();
   }
 
   // player car

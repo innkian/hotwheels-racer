@@ -85,6 +85,24 @@ const GEAR_CATALOG = {
     { id: 'cowboy', name: 'COWBOY',  price: 12, say: 'A cowboy hat! Yee-haw!' },
     { id: 'crown',  name: 'CROWN',   price: 15, say: 'A golden crown! You are the king of the race!' },
   ],
+  gadgets: [
+    { id: 'magnet', name: 'MAGNET', icon: '🧲', price: 40, say: 'Coin magnet! It pulls coins to your car so you catch more!' },
+    { id: 'shield', name: 'SHIELD', icon: '🛡️', price: 50, say: 'Shield! It protects your car from one big bump every race!' },
+  ],
+  horns: [
+    { id: 'beep',     name: 'BEEP',     icon: '📯', price: 0,  say: 'Beep beep! The classic horn!' },
+    { id: 'train',    name: 'TRAIN',    icon: '🚂', price: 15, say: 'A train horn! Choo choo!' },
+    { id: 'dog',      name: 'DOG',      icon: '🐶', price: 15, say: 'A doggy horn! It barks! Woof woof!' },
+    { id: 'cow',      name: 'COW',      icon: '🐮', price: 15, say: 'A cow horn! It moos! Moo!' },
+    { id: 'elephant', name: 'ELEPHANT', icon: '🐘', price: 20, say: 'An elephant horn! It trumpets! Toot!' },
+  ],
+  trails: [
+    { id: 'none',    name: 'NONE',    icon: '⭕', price: 0,  say: 'No trail today.' },
+    { id: 'rainbow', name: 'RAINBOW', icon: '🌈', price: 25, say: 'A rainbow trail! It leaves so many colors behind you!' },
+    { id: 'bubbles', name: 'BUBBLES', icon: '🫧', price: 20, say: 'A bubble trail! Pop pop pop!' },
+    { id: 'stars',   name: 'STARS',   icon: '⭐', price: 20, say: 'A star trail! Super sparkly!' },
+    { id: 'fire',    name: 'FIRE',    icon: '🔥', price: 30, say: 'A fire trail! Blazing fast!' },
+  ],
 };
 function gearItem(cat, id) {
   return GEAR_CATALOG[cat].find(i => i.id === id) || GEAR_CATALOG[cat][0];

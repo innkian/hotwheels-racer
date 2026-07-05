@@ -139,16 +139,16 @@ html, body {
   border-radius: 16px;
 }
 #shop-car-canvas { width: 100%; height: 110px; display: block; }
-#shop-tabs { display: flex; gap: 10px; width: 100%; max-width: 920px; }
+#shop-tabs { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; max-width: 920px; }
 .shop-tab {
-  flex: 1;
+  flex: 1; min-width: 76px;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  font-size: 24px; font-weight: 800;
+  font-size: 21px; font-weight: 800;
   background: rgba(255,255,255,0.55);
   border: 4px solid transparent; border-radius: 14px;
-  padding: 8px 4px; cursor: pointer;
+  padding: 6px 4px; cursor: pointer;
 }
-.shop-tab span { font-size: 12px; color: #1d3557; }
+.shop-tab span { font-size: 11px; color: #1d3557; }
 .shop-tab.selected { border-color: #e63946; background: #ffe3e5; }
 #shop-grid {
   flex: 1; width: 100%; max-width: 920px;
@@ -359,6 +359,16 @@ html, body {
 }
 #fire-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #4d1a78; }
 #fire-btn.hidden { display: none; }
+#horn-btn {
+  width: min(15vw, 68px); height: min(15vw, 68px);
+  border-radius: 50%;
+  border: none;
+  font-size: clamp(22px, 5vw, 30px);
+  touch-action: none;
+  background: #ffd60a;
+  box-shadow: 0 5px 0 #b07d00;
+}
+#horn-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b07d00; }
 .pedal-sub { font-size: 11px; font-weight: 500; opacity: 0.9; }
 #coin-count {
   font-size: 20px; font-weight: 800; color: #7a5c00;
