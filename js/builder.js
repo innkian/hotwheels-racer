@@ -28,6 +28,14 @@
       if (type === 'bumps') return gy - 4.5 * Math.sin(t * Math.PI) * Math.sin(t * 14 * Math.PI);
       if (type === 'mountain') return gy - h * 0.5 * Math.sin(t * Math.PI);
       if (type === 'jump') return (t > 0.35 && t < 0.62) ? gy - ((t - 0.35) / 0.27) * h * 0.38 : gy;
+      if (type === 'water') return (t > 0.2 && t < 0.9) ? gy + h * 0.22 : gy;
+      if (type === 'rocks') return gy + h * 0.18 * Math.sin(t * Math.PI);
+      if (type === 'steep') {
+        if (t <= 0.2) return gy;
+        if (t <= 0.5) return gy - ((t - 0.2) / 0.3) * h * 0.45;
+        if (t <= 0.6) return gy - h * 0.45;
+        return gy - (1 - (t - 0.6) / 0.4) * h * 0.45;
+      }
       return gy;
     };
     // ground
@@ -66,6 +74,20 @@
         c.arc(w * (0.3 + k * 0.2), gy - 16 - 6 * Math.sin(k * 2), 6, 0, Math.PI * 2);
         c.fill(); c.stroke();
       }
+    }
+    if (type === 'water') {
+      c.fillStyle = 'rgba(50, 140, 235, 0.6)';
+      c.fillRect(w * 0.2, gy - 2, w * 0.7, h * 0.24);
+      c.fillStyle = '#8d6e4b';
+      [0.35, 0.55, 0.75].forEach(f => {
+        c.beginPath(); c.roundRect(w * f - 8, gy - 5, 16, 6, 3); c.fill();
+      });
+    }
+    if (type === 'rocks') {
+      c.fillStyle = '#7d7468';
+      [[0.4, 0.3], [0.6, 0.45], [0.52, 0.6]].forEach(([fx, fy]) => {
+        c.beginPath(); c.arc(w * fx, h * fy, 5, 0, Math.PI * 2); c.fill();
+      });
     }
   }
 

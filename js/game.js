@@ -224,9 +224,9 @@ const OPP_BASE_SPEED = [200, 260, 320];
 
 // ===================== Difficulty =====================
 const DIFFICULTIES = {
-  easy:   { label: 'Easy',   icon: '🐢', oppMult: 0.72, hearts: 5, caves: 1, headStart: 900 },
-  medium: { label: 'Medium', icon: '🚗', oppMult: 1.0,  hearts: 3, caves: 2, headStart: 500 },
-  hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.15, hearts: 3, caves: 3, headStart: 250 },
+  easy:   { label: 'Easy',   icon: '🐢', oppMult: 0.72, hearts: 5, caves: 1, headStart: 900, hazards: 0, hazardPool: [], rockRate: 1.6 },
+  medium: { label: 'Medium', icon: '🚗', oppMult: 1.0,  hearts: 3, caves: 2, headStart: 500, hazards: 1, hazardPool: ['water', 'rocks'], rockRate: 1.4 },
+  hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.15, hearts: 3, caves: 3, headStart: 250, hazards: 2, hazardPool: ['water', 'rocks', 'steep'], rockRate: 1.0 },
 };
 function currentDifficulty() { return DIFFICULTIES[save.difficulty] || DIFFICULTIES.easy; }
 
@@ -244,6 +244,9 @@ const SEGMENT_TYPES = {
   mountain: { label: 'MOUNTAIN', speak: 'Big mountain!', code: 'm' },
   cave:     { label: 'CAVE',     speak: 'Cave! Go slow!', code: 'c' },
   coins:    { label: 'COINS',    speak: 'Coins!',        code: 'o' },
+  water:    { label: 'WATER',    speak: 'Water! Jump on the logs!', code: 'w' },
+  rocks:    { label: 'ROCKS',    speak: 'Falling rocks! Watch out!', code: 'k' },
+  steep:    { label: 'STEEP',    speak: 'A super steep wall! You need monster tyres or a rocket engine!', code: 's' },
 };
 
 // Track codes for share links: one letter per piece, e.g. "jcmho"
@@ -268,12 +271,17 @@ try {
 } catch (e) {}
 
 function rollSegments() {
+  const D = currentDifficulty();
   const fun = ['hills', 'bumps', 'jump', 'coins', 'mountain', 'hills', 'jump', 'coins'];
   const segs = [];
   for (let i = 0; i < 8; i++) segs.push(fun[Math.floor(Math.random() * fun.length)]);
-  // place caves (count set by difficulty) anywhere except the first segment
+  // caves and hazards land anywhere except the first segment
   const spots = [1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - 0.5);
-  for (let c = 0; c < currentDifficulty().caves; c++) segs[spots[c]] = 'cave';
+  let s = 0;
+  for (let c = 0; c < D.caves; c++) segs[spots[s++]] = 'cave';
+  for (let h = 0; h < D.hazards && D.hazardPool.length; h++) {
+    segs[spots[s++]] = D.hazardPool[Math.floor(Math.random() * D.hazardPool.length)];
+  }
   return segs;
 }
 function similarity(a, b) {
@@ -304,7 +312,11 @@ function buildTrack(segments) {
   const p2 = Math.random() * Math.PI * 2;
   const length = START_PAD + segments.length * SEG_LEN + FINISH_PAD;
   const caves = [];
-  const ramps = [];   // linear climb + sharp drop: fast cars launch off these
+  const ramps = [];      // linear climb + sharp drop: fast cars launch off these
+  const waters = [];     // pits full of water with floating log platforms
+  const platforms = [];  // one-way platforms (logs): land on top, drive under
+  const rockZones = [];  // ravines with falling rocks
+  const steeps = [];     // steep walls needing grip or big speed
   segments.forEach((type, i) => {
     const s0 = START_PAD + i * SEG_LEN;
     if (type === 'jump') ramps.push({ x: s0 + 370, L: 170, H: 70 });
@@ -315,9 +327,16 @@ function buildTrack(segments) {
       ramps.push({ x: z.start + len * 0.22, L: 110, H: 50 });
       ramps.push({ x: z.start + len * 0.58, L: 110, H: 50 });
     }
+    if (type === 'water') {
+      // pit t: 0.21..0.84 of segment; small launch ramp before it
+      waters.push({ start: s0 + SEG_LEN * 0.21, end: s0 + SEG_LEN * 0.84, rescueX: s0 - 60 });
+      ramps.push({ x: s0 + 40, L: 130, H: 45 });
+    }
+    if (type === 'rocks') rockZones.push({ start: s0 + 100, end: s0 + 820 });
+    if (type === 'steep') steeps.push({ start: s0 + 60, end: s0 + SEG_LEN, failX: s0 + 80 });
   });
-  // smooth base shape (no ramps) — cave roofs hang from this
-  const shape = (x) => {
+  // smooth base line (no pits/walls/ramps) — cave roofs and water surfaces use it
+  const shapeBase = (x) => {
     const rampIn = Math.min(1, Math.max(0, (x - 300) / 600)); // flat start
     let y = 420 + rampIn * 14 * Math.sin(x / 210 + p1);
     const i = Math.floor((x - START_PAD) / SEG_LEN);
@@ -328,11 +347,43 @@ function buildTrack(segments) {
       if (type === 'hills') y += 44 * w * Math.sin(t * 3 * Math.PI + p2);
       else if (type === 'bumps') y += 11 * w * Math.sin(t * 16 * Math.PI);
       else if (type === 'mountain') y -= 100 * Math.sin(Math.PI * t);
+      else if (type === 'rocks') y += 110 * Math.sin(Math.PI * t); // down into a ravine
     }
     return y;
   };
+  // carved features on top of the base line
+  const carve = (x) => {
+    const i = Math.floor((x - START_PAD) / SEG_LEN);
+    if (i < 0 || i >= segments.length) return 0;
+    const t = (x - START_PAD - i * SEG_LEN) / SEG_LEN;
+    const type = segments[i];
+    if (type === 'water' && t > 0.21 && t < 0.84) {
+      // water pit: quick drop in, 150 deep, drivable slope back out
+      const u = (t - 0.21) / 0.63;
+      const rampInP = Math.min(1, u / 0.10);
+      const rampOutP = Math.min(1, (1 - u) / 0.44);
+      return 150 * Math.min(rampInP, rampOutP);
+    }
+    if (type === 'steep') {
+      // flat run-up, steep 260-high wall, small plateau, gentler ride down
+      if (t <= 0.16) return 0;
+      if (t <= 0.54) return -260 * (t - 0.16) / 0.38;
+      if (t <= 0.60) return -260;
+      if (t <= 1.0) return -260 * (1 - (t - 0.60) / 0.40);
+    }
+    return 0;
+  };
+  // floating logs sit just above the water surface
+  segments.forEach((type, i) => {
+    if (type !== 'water') return;
+    const s0 = START_PAD + i * SEG_LEN;
+    [0.36, 0.53, 0.70].forEach(f => {
+      const lx = s0 + SEG_LEN * f;
+      platforms.push({ x: lx, half: 58, y: shapeBase(lx) - 8 });
+    });
+  });
   const ground = (x) => {
-    let y = shape(x);
+    let y = shapeBase(x) + carve(x);
     for (const r of ramps) {
       const u = x - r.x;
       if (u > 0 && u < r.L) y -= r.H * (u / r.L);
@@ -342,17 +393,29 @@ function buildTrack(segments) {
   const ceiling = (x) => {
     for (const z of caves) {
       const t = Math.min((x - z.start) / 130, (z.end - x) / 130);
-      if (t > 0) return shape(x) - (CAVE_CLEARANCE + Math.max(0, 1 - t) * 320);
+      if (t > 0) return shapeBase(x) - (CAVE_CLEARANCE + Math.max(0, 1 - t) * 320);
     }
     return -Infinity;
   };
   const inCave = (x) => caves.some(z => x > z.start && x < z.end);
-  return { segments, length, caves, ramps, ground, ceiling, inCave };
+  const waterAt = (x) => waters.find(z => x > z.start && x < z.end) || null;
+  return { segments, length, caves, ramps, waters, platforms, rockZones, steeps, ground, ceiling, inCave, waterAt, surface: shapeBase };
 }
 
-function groundPose(x) {
-  const gy1 = terra.ground(x - WHEEL_X);
-  const gy2 = terra.ground(x + WHEEL_X);
+// refY: the car's current y — log platforms only count when the car is at or
+// above them (one-way), so you can also drive underneath through the water.
+function sampleGround(x, refY) {
+  let y = terra.ground(x);
+  if (refY !== undefined && terra.platforms) {
+    for (const p of terra.platforms) {
+      if (Math.abs(x - p.x) <= p.half && refY <= p.y - WHEEL_R + 14 && p.y < y) y = p.y;
+    }
+  }
+  return y;
+}
+function groundPose(x, refY) {
+  const gy1 = sampleGround(x - WHEEL_X, refY);
+  const gy2 = sampleGround(x + WHEEL_X, refY);
   return {
     y: (gy1 + gy2) / 2 - WHEEL_R,
     slope: Math.atan2(gy2 - gy1, WHEEL_X * 2),
@@ -376,7 +439,23 @@ function makeCoins(track) {
   const coins = [];
   track.segments.forEach((type, i) => {
     const s0 = START_PAD + i * SEG_LEN;
-    if (type === 'cave') return;
+    if (type === 'cave' || type === 'rocks') return;
+    if (type === 'water') {
+      // one coin floating over each log — reward for the brave jumper
+      [0.36, 0.53, 0.70].forEach(f => {
+        const cx = s0 + SEG_LEN * f;
+        coins.push({ x: cx, y: track.surface(cx) - 70, got: false });
+      });
+      return;
+    }
+    if (type === 'steep') {
+      // treasure on the plateau
+      for (let k = 0; k < 3; k++) {
+        const cx = s0 + SEG_LEN * (0.55 + k * 0.02);
+        coins.push({ x: cx, y: track.ground(cx) - 55, got: false });
+      }
+      return;
+    }
     if (type === 'coins') {
       // a generous wavy line of coins across the whole segment,
       // low enough to grab just by driving through
@@ -448,7 +527,15 @@ function initRace(keepTrack) {
     maxSpeed: MAX_SPEED * engine.speed * tyres.speed,
     accel: ACCEL * engine.speed,
     slopeK: tyres.slope,
+    grip: tyres.grip,
     engineLevel: engine.id,
+    rocks: [],
+    rockTimer: 1,
+    waterStuckTimer: 0,
+    steepFails: 0,
+    steepFailCooldown: 0,
+    magicBoost: 0,
+    hazardWarned: [],
     state: 'countdown', // countdown | running | paused | crashed | finished
     countdownVal: 3,
     countdownTimer: 0,
@@ -660,19 +747,37 @@ function updateRace(dt) {
   if (car.bonkCooldown > 0) car.bonkCooldown -= dt;
   const canDrive = car.stunTimer <= 0;
 
+  // water: submerged when below the surface line inside a water pit
+  const waterZone = terra.waterAt ? terra.waterAt(car.x) : null;
+  const submerged = waterZone && car.y > terra.surface(car.x) + 6;
+  if (race.magicBoost > 0) race.magicBoost -= dt;
+
   if (car.grounded) {
-    const pose = groundPose(car.x);
-    // pedals (extra torque at low speed so steep climbs never trap the car)
-    if (canDrive && inp.gas) car.vx += race.accel * (car.vx < 220 ? 1.8 : 1) * dt;
+    const pose = groundPose(car.x, car.y);
+    // wheels slip on slopes steeper than the tyres' grip (monster tyres grip best)
+    const climbing = pose.slope < 0 && car.vx > -20;
+    const slipping = climbing && Math.abs(pose.slope) > race.grip && race.magicBoost <= 0;
+    let accelMult = slipping ? 0.15 : 1;
+    let speedCap = race.maxSpeed;
+    if (submerged) {
+      // engine power decides if you can drive under water
+      accelMult *= 0.55 + 0.25 * (race.engineLevel - 1);
+      speedCap = 200 + 60 * (race.engineLevel - 1);
+      car.vx *= Math.max(0, 1 - 0.9 * dt);
+    }
+    if (race.magicBoost > 0) { accelMult = 3; speedCap = 720; }
+    // pedals (extra torque at low speed so gentle climbs never trap the car —
+    // but not under water, where engine power is the whole challenge)
+    if (canDrive && inp.gas) car.vx += race.accel * accelMult * (car.vx < 220 && !submerged ? 1.8 : 1) * dt;
     if (canDrive && inp.brake) car.vx -= BRAKE_DECEL * dt;
     // gravity along the slope (tyre grip reduces it) + rolling drag
     car.vx += GRAVITY * Math.sin(pose.slope) * dt * race.slopeK;
     car.vx *= Math.max(0, 1 - 0.28 * dt);
-    car.vx = Math.min(race.maxSpeed, Math.max(REVERSE_MAX, car.vx));
+    car.vx = Math.min(speedCap, Math.max(REVERSE_MAX, car.vx));
 
     const prevY = car.y;
     car.x += car.vx * dt;
-    const newPose = groundPose(car.x);
+    const newPose = groundPose(car.x, car.y);
 
     // Launch when the terrain drops away faster than gravity could pull the
     // car down — preserves the upward velocity gained climbing a bump, so
@@ -697,22 +802,26 @@ function updateRace(dt) {
     }
     car.angVel = Math.max(-4, Math.min(4, car.angVel));
     car.angle += car.angVel * dt;
-    car.vy += GRAVITY * dt;
+    // water is buoyant: sink slowly, swim sluggishly
+    car.vy += GRAVITY * (submerged ? 0.4 : 1) * dt;
+    if (submerged) { car.vx *= Math.max(0, 1 - 1.1 * dt); car.vy *= Math.max(0, 1 - 1.4 * dt); }
     car.x += car.vx * dt;
     car.y += car.vy * dt;
 
-    const pose = groundPose(car.x);
+    const pose = groundPose(car.x, car.y);
     if (car.y >= pose.y) {
       // landing
       car.y = pose.y;
       car.grounded = true;
       const diff = Math.abs(normAngle(car.angle - pose.slope));
-      if (diff > 2.0) {
+      if (diff > 2.0 && !submerged) {
         car.angle = pose.slope;   // flip back onto wheels
         bonk(false);
-      } else if (car.vy > 950) {
+      } else if (car.vy > 950 && !submerged) {
         car.angle = pose.slope;
         bonk(false);
+      } else if (submerged && diff > 2.0) {
+        car.angle = pose.slope;   // water landings are soft — just right the car
       } else {
         car.angle = pose.slope + normAngle(car.angle - pose.slope) * 0.3;
       }
@@ -755,6 +864,86 @@ function updateRace(dt) {
   race.missiles = race.missiles.filter(m => !m.dead);
   for (const b of race.booms) b.t += dt;
   race.booms = race.booms.filter(b => b.t < 0.5);
+
+  // ---- water: stuck rescue (engine too weak to swim out) ----
+  if (submerged && inp.gas && Math.abs(car.vx) < 45) {
+    race.waterStuckTimer += dt;
+    if (race.waterStuckTimer > 2.5) {
+      race.waterStuckTimer = 0;
+      car.bonkCooldown = 0;
+      race.shieldCharge = 0;  // rescue costs the heart even with a shield
+      bonk(false);
+      Speech.say('The water is too deep for this engine! The tow truck carried you across. A bigger engine can drive under water!');
+      if (race.state === 'running') {
+        car.x = waterZone.end + 80;   // towed to the far bank
+        const p = groundPose(car.x, undefined);
+        car.y = p.y; car.angle = p.slope; car.vx = 0; car.vy = 0; car.grounded = true;
+      }
+    }
+  } else {
+    race.waterStuckTimer = 0;
+  }
+  // splash-y bubbles while under water
+  if (submerged && Math.random() < 0.3) {
+    race.particles.push({ x: car.x - 20 + Math.random() * 40, y: car.y - 20, t: 0, seed: Math.random(), kind: 'bubbles' });
+  }
+
+  // ---- falling rocks in ravines ----
+  const inRockZone = race.track.rockZones.some(z => car.x > z.start - 200 && car.x < z.end);
+  if (inRockZone && race.state === 'running') {
+    race.rockTimer -= dt;
+    if (race.rockTimer <= 0) {
+      race.rockTimer = currentDifficulty().rockRate * (0.8 + Math.random() * 0.5);
+      const rx = car.x + 320 + Math.random() * 260;
+      race.rocks.push({ x: rx, y: terra.ground(rx) - 520, vy: 0, r: 14 + Math.random() * 9, settled: 0 });
+    }
+  }
+  for (const rock of race.rocks) {
+    if (rock.settled > 0) { rock.settled += dt; continue; }
+    rock.vy += GRAVITY * 0.85 * dt;
+    rock.y += rock.vy * dt;
+    const gy = terra.ground(rock.x) - rock.r;
+    if (rock.y >= gy) { rock.y = gy; rock.settled = 0.001; }
+    if (Math.abs(rock.x - car.x) < 42 && Math.abs(rock.y - (car.y - 20)) < 48) {
+      rock.settled = 99;
+      bonk(false);
+    }
+  }
+  race.rocks = race.rocks.filter(r => r.settled < 2.5 && r.x > car.x - 900);
+
+  // ---- steep wall: coach after failed climbs, magic push after three ----
+  if (race.steepFailCooldown > 0) race.steepFailCooldown -= dt;
+  const steepZone = race.track.steeps.find(z => car.x > z.start && car.x < z.end);
+  if (steepZone && car.grounded && inp.gas && race.steepFailCooldown <= 0) {
+    const pose = groundPose(car.x, car.y);
+    if (pose.slope < -0.5 && car.vx < 12) {
+      race.steepFails += 1;
+      race.steepFailCooldown = 3;
+      if (race.steepFails >= 3) {
+        race.steepFails = 0;
+        race.magicBoost = 3;
+        Speech.say('Here is a magic push! Wheee!');
+        SFX.win();
+      } else {
+        Speech.say(race.steepFails === 1
+          ? 'Too steep! Go super duper fast, or get monster tyres!'
+          : 'So close! Monster tyres or a rocket engine can climb this!');
+      }
+    }
+  }
+
+  // hazard warnings (spoken once each, just before arriving)
+  const warnZones = [
+    ...race.track.waters.map(z => ({ x: z.start, say: 'Water ahead! Jump on the logs!' })),
+    ...race.track.rockZones.map(z => ({ x: z.start, say: 'Watch out! Falling rocks!' })),
+    ...race.track.steeps.map(z => ({ x: z.start, say: 'A big wall is coming! Go super fast!' })),
+  ];
+  warnZones.forEach((z, i) => {
+    if (!race.hazardWarned[i] && car.x > z.x - 550 && car.x < z.x) {
+      race.hazardWarned[i] = true;
+      Speech.say(z.say);
+    }
+  });
 
   // spoken cave coaching: warn before, praise a clean pass
   race.track.caves.forEach((z, i) => {
@@ -949,6 +1138,84 @@ function renderRace() {
     }
   }
 
+  // water pools + floating logs
+  for (const z of race.track.waters) {
+    if (z.end < x0 || z.start > x1) continue;
+    rctx.beginPath();
+    rctx.moveTo(z.start, terra.surface(z.start));
+    for (let x = z.start; x <= z.end; x += 14) rctx.lineTo(x, terra.surface(x) - 2);
+    for (let x = z.end; x >= z.start; x -= 14) rctx.lineTo(x, terra.ground(x) + 4);
+    rctx.closePath();
+    rctx.fillStyle = 'rgba(50, 140, 235, 0.55)';
+    rctx.fill();
+    // shimmering surface line
+    rctx.strokeStyle = 'rgba(220, 245, 255, 0.8)';
+    rctx.lineWidth = 3;
+    rctx.beginPath();
+    for (let x = z.start; x <= z.end; x += 14) {
+      const wy = terra.surface(x) - 2 + Math.sin(x / 40 + performance.now() / 350) * 2;
+      x === z.start ? rctx.moveTo(x, wy) : rctx.lineTo(x, wy);
+    }
+    rctx.stroke();
+  }
+  for (const p of race.track.platforms) {
+    if (p.x + p.half < x0 || p.x - p.half > x1) continue;
+    rctx.fillStyle = '#8d6e4b';
+    rctx.beginPath();
+    rctx.roundRect(p.x - p.half, p.y, p.half * 2, 16, 8);
+    rctx.fill();
+    rctx.strokeStyle = '#6b5236';
+    rctx.lineWidth = 2;
+    rctx.stroke();
+    // wood end rings
+    rctx.fillStyle = '#c9a06a';
+    rctx.beginPath();
+    rctx.ellipse(p.x + p.half - 4, p.y + 8, 4, 7, 0, 0, Math.PI * 2);
+    rctx.fill();
+  }
+
+  // falling rocks
+  for (const rock of race.rocks) {
+    if (rock.x < x0 || rock.x > x1) continue;
+    rctx.globalAlpha = rock.settled > 1.5 ? Math.max(0, 1 - (rock.settled - 1.5)) : 1;
+    rctx.fillStyle = '#7d7468';
+    rctx.beginPath();
+    rctx.arc(rock.x, rock.y, rock.r, 0, Math.PI * 2);
+    rctx.fill();
+    rctx.fillStyle = '#5f574c';
+    rctx.beginPath();
+    rctx.arc(rock.x - rock.r * 0.3, rock.y - rock.r * 0.25, rock.r * 0.4, 0, Math.PI * 2);
+    rctx.fill();
+    rctx.globalAlpha = 1;
+  }
+
+  // hazard warning signs (like the cave SLOW sign)
+  const hazardSigns = [
+    ...race.track.waters.map(z => ({ x: z.start - 200, txt: 'SPLASH' })),
+    ...race.track.rockZones.map(z => ({ x: z.start - 150, txt: 'ROCKS' })),
+    ...race.track.steeps.map(z => ({ x: z.start - 60, txt: 'STEEP' })),
+  ];
+  for (const sign of hazardSigns) {
+    if (sign.x < x0 || sign.x > x1) continue;
+    const gy = terra.ground(sign.x);
+    rctx.fillStyle = '#8d6e4b';
+    rctx.fillRect(sign.x - 4, gy - 70, 8, 70);
+    rctx.fillStyle = '#ffd60a';
+    rctx.strokeStyle = '#e63946';
+    rctx.lineWidth = 5;
+    rctx.beginPath();
+    rctx.moveTo(sign.x, gy - 130);
+    rctx.lineTo(sign.x + 38, gy - 66);
+    rctx.lineTo(sign.x - 38, gy - 66);
+    rctx.closePath();
+    rctx.fill();
+    rctx.stroke();
+    rctx.fillStyle = '#1d3557';
+    rctx.font = 'bold 14px sans-serif';
+    rctx.textAlign = 'center';
+    rctx.fillText(sign.txt, sign.x, gy - 76);
+  }
+
   // finish line
   const FIN = race.track.length;
   if (FIN > x0 && FIN < x1 + 300) {
@@ -1073,6 +1340,12 @@ function renderRace() {
   }
 
   rctx.restore();
+
+  // underwater tint over the whole view
+  if (terra.waterAt && terra.waterAt(car.x) && car.y > terra.surface(car.x) + 6) {
+    rctx.fillStyle = 'rgba(40, 120, 210, 0.22)';
+    rctx.fillRect(0, 0, w, h);
+  }
 
   // damage flash
   document.getElementById('flash-overlay').style.opacity = race.flash * 0.5;

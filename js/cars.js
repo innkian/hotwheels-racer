@@ -65,9 +65,9 @@ const GEAR_CATALOG = {
     { id: 3, name: 'ROCKET',   icon: '🚀', price: 60, speed: 1.16, say: 'Rocket engine! Super duper fast! Be extra careful in the caves!' },
   ],
   tyres: [
-    { id: 'normal',  name: 'NORMAL',  price: 0,  speed: 1,    slope: 0.6,  wheelMult: 1,    say: 'Normal tyres. Good for everywhere.' },
-    { id: 'monster', name: 'MONSTER', price: 25, speed: 0.96, slope: 0.42, wheelMult: 1.3,  say: 'Monster tyres! Big and bouncy! They climb big hills really well!' },
-    { id: 'speedy',  name: 'SPEEDY',  price: 25, speed: 1.06, slope: 0.68, wheelMult: 0.92, say: 'Speedy tyres! Zoom! They are the fastest on flat roads!' },
+    { id: 'normal',  name: 'NORMAL',  price: 0,  speed: 1,    slope: 0.6,  grip: 0.6,  wheelMult: 1,    say: 'Normal tyres. Good for everywhere.' },
+    { id: 'monster', name: 'MONSTER', price: 25, speed: 0.96, slope: 0.42, grip: 0.85, wheelMult: 1.3,  say: 'Monster tyres! Big and bouncy! They climb big hills really well!' },
+    { id: 'speedy',  name: 'SPEEDY',  price: 25, speed: 1.06, slope: 0.68, grip: 0.5,  wheelMult: 0.92, say: 'Speedy tyres! Zoom! They are the fastest on flat roads!' },
   ],
   drivers: [
     { id: 'max',   name: 'MAX',   price: 0,  say: 'Max is driving! Hi Max!' },
