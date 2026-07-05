@@ -163,6 +163,8 @@ const MP = (() => {
 
   return { state, createRoom, joinRoom, publish, reportFinish, iWon, leave, sdkReady };
 })();
+// game.js guards its integration points with `window.MP && ...`
+window.MP = MP;
 
 // ===================== Two Players screen =====================
 (() => {
