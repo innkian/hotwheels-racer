@@ -347,6 +347,18 @@ html, body {
   box-shadow: 0 6px 0 #9e242e;
 }
 #brake-pedal.pressed { background: #ff8c42; box-shadow: 0 2px 0 #b05a1d; transform: translateY(4px); }
+#fire-btn {
+  width: min(20vw, 96px); height: min(20vw, 96px);
+  border-radius: 50%;
+  border: none;
+  color: white; font-weight: 800; font-size: clamp(20px, 5vw, 30px);
+  line-height: 1.15;
+  touch-action: none;
+  background: #7b2cbf;
+  box-shadow: 0 6px 0 #4d1a78;
+}
+#fire-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #4d1a78; }
+#fire-btn.hidden { display: none; }
 .pedal-sub { font-size: 11px; font-weight: 500; opacity: 0.9; }
 #coin-count {
   font-size: 20px; font-weight: 800; color: #7a5c00;

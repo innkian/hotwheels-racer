@@ -18,6 +18,15 @@ const CAR_DESIGNS = [
   { id: 'c13', name: 'Camo Crawler', body: 'truck',  colors: { body: '#606c38', accent: '#283618', window: '#1b1b1b' }, decal: 'camo',    spoiler: false },
   { id: 'c14', name: 'Turbo Teal',   body: 'sporty', colors: { body: '#00b4d8', accent: '#03045e', window: '#0a1128' }, decal: 'stripe',  spoiler: true  },
   { id: 'c15', name: 'Rocket Red',   body: 'muscle', colors: { body: '#d00000', accent: '#ffffff', window: '#03071e' }, decal: 'flames',  spoiler: true  },
+  { id: 'c16', name: 'Police Chase', body: 'sedan',  colors: { body: '#f4f4f4', accent: '#1d3557', window: '#22333b' }, decal: 'stripe',  spoiler: false, lights: true,  typeWord: 'police car' },
+  { id: 'c17', name: 'Lightning F1', body: 'f1',     colors: { body: '#e63946', accent: '#ffffff', window: '#111111' }, decal: 'stripe',  spoiler: true,  typeWord: 'formula one car' },
+  { id: 'c18', name: 'Turbo Tank',   body: 'tank',   colors: { body: '#606c38', accent: '#283618', window: '#1b1b1b' }, decal: 'camo',    spoiler: false, weapon: true,  typeWord: 'tank' },
+  { id: 'c19', name: 'Speedy Taxi',  body: 'sedan',  colors: { body: '#ffd60a', accent: '#1b1b1b', window: '#22333b' }, decal: 'stripe',  spoiler: false, typeWord: 'taxi' },
+  { id: 'c20', name: 'Night Patrol', body: 'muscle', colors: { body: '#22223b', accent: '#f4f4f4', window: '#0a0a0a' }, decal: 'stripe',  spoiler: false, lights: true,  typeWord: 'police car' },
+  { id: 'c21', name: 'Silver F1',    body: 'f1',     colors: { body: '#c9c9c9', accent: '#2b6cff', window: '#111111' }, decal: 'stripe',  spoiler: true,  typeWord: 'formula one car' },
+  { id: 'c22', name: 'Fire Rescue',  body: 'truck',  colors: { body: '#d00000', accent: '#ffd60a', window: '#1b1b1b' }, decal: 'stripe',  spoiler: false, lights: true,  typeWord: 'fire truck' },
+  { id: 'c23', name: 'Steel Tank',   body: 'tank',   colors: { body: '#6c757d', accent: '#343a40', window: '#1b1b1b' }, decal: 'camo',    spoiler: false, weapon: true,  typeWord: 'tank' },
+  { id: 'c24', name: 'Golden F1',    body: 'f1',     colors: { body: '#ffbf00', accent: '#7f5539', window: '#111111' }, decal: 'stars',   spoiler: true,  typeWord: 'formula one car' },
 ];
 
 // Spoken-word attributes for the listening game. Color words are what a
@@ -26,14 +35,16 @@ const CAR_WORDS = {
   c01: 'red',  c02: 'yellow', c03: 'green',  c04: 'blue',   c05: 'blue',
   c06: 'orange', c07: 'purple', c08: 'pink', c09: 'silver', c10: 'gold',
   c11: 'white', c12: 'purple', c13: 'green', c14: 'blue',   c15: 'red',
+  c16: 'white', c17: 'red',    c18: 'green', c19: 'yellow', c20: 'black',
+  c21: 'silver', c22: 'red',   c23: 'silver', c24: 'gold',
 };
-const TYPE_WORDS = { sporty: 'race car', sedan: 'race car', muscle: 'race car', truck: 'truck', buggy: 'buggy' };
+const TYPE_WORDS = { sporty: 'race car', sedan: 'race car', muscle: 'race car', truck: 'truck', buggy: 'buggy', f1: 'race car', tank: 'tank' };
 const DECAL_WORDS = { flames: 'flames', stripe: 'stripes', stars: 'stars', camo: 'spots', none: null };
 
 function carWords(design) {
   return {
     color: CAR_WORDS[design.id] || 'red',
-    type: TYPE_WORDS[design.body] || 'race car',
+    type: design.typeWord || TYPE_WORDS[design.body] || 'race car',
     decal: DECAL_WORDS[design.decal] || null,
   };
 }
@@ -88,7 +99,11 @@ const BODY_GEOM = {
   muscle: { wheelR: 9,   head: { x: -5, y: -17, r: 4.2 } },
   truck:  { wheelR: 12,  head: { x: 1,  y: -24, r: 4.8 } },
   buggy:  { wheelR: 10,  head: { x: -1, y: -16, r: 5.2 } },
+  f1:     { wheelR: 8,   head: { x: -4, y: -17, r: 3.8 } },
+  tank:   { wheelR: 8,   head: { x: -2, y: -29, r: 4 } },
 };
+// roof line for police/fire light bars
+const ROOF_Y = { sedan: -24, sporty: -24, muscle: -23, truck: -30, buggy: -22, f1: -16, tank: -26 };
 
 function bodyPath(body) {
   const p = new Path2D();
@@ -132,6 +147,23 @@ function bodyPath(body) {
     p.lineTo(27, -20);
     p.lineTo(27, -6);
     p.closePath();
+  } else if (body === 'f1') {
+    p.moveTo(-28, -3);
+    p.lineTo(-28, -10);
+    p.lineTo(-14, -11);
+    p.lineTo(-10, -16);          // cockpit hump
+    p.lineTo(-1, -16);
+    p.lineTo(5, -10);
+    p.lineTo(24, -8);            // long low nose
+    p.lineTo(28, -5);
+    p.lineTo(28, -3);
+    p.closePath();
+  } else if (body === 'tank') {
+    p.moveTo(-26, -4);
+    p.lineTo(-21, -15);          // sloped hull
+    p.lineTo(21, -15);
+    p.lineTo(26, -4);
+    p.closePath();
   } else { // buggy
     p.moveTo(-24, -3);
     p.quadraticCurveTo(-26, -20, -8, -22);
@@ -152,6 +184,10 @@ function windowPath(body) {
     p.moveTo(-11, -21); p.lineTo(0, -21); p.lineTo(4, -15); p.lineTo(-13, -15); p.closePath();
   } else if (body === 'truck') {
     p.moveTo(-6, -28); p.lineTo(6, -28); p.lineTo(11, -21); p.lineTo(-6, -21); p.closePath();
+  } else if (body === 'f1') {
+    p.moveTo(-9, -15); p.lineTo(-2, -15); p.lineTo(2, -11); p.lineTo(-10, -11); p.closePath();
+  } else if (body === 'tank') {
+    p.moveTo(-9, -24); p.lineTo(-2, -24); p.lineTo(-2, -18); p.lineTo(-9, -18); p.closePath();
   } else { // buggy
     p.moveTo(-8, -20); p.lineTo(6, -19); p.lineTo(10, -13); p.lineTo(-10, -13); p.closePath();
   }
@@ -366,6 +402,23 @@ function drawCar(ctx, design, x, y, scale, angle, wheelSpin, equip) {
   ctx.lineWidth = 1.2;
   ctx.stroke(bp);
 
+  // tank extras: turret, cannon barrel, tread skirt
+  if (design.body === 'tank') {
+    ctx.fillStyle = c.body;
+    ctx.beginPath();
+    ctx.roundRect(-13, -26, 21, 11, 2.5);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.stroke();
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(8, -23.5, 22, 3.2);       // barrel
+    ctx.fillRect(28, -24.5, 3, 5.2);       // muzzle
+    ctx.fillStyle = c.accent;
+    ctx.beginPath();
+    ctx.roundRect(-27, -8, 54, 9, 4.5);    // tread skirt
+    ctx.fill();
+  }
+
   // window
   ctx.fillStyle = c.window;
   ctx.fill(windowPath(design.body));
@@ -376,11 +429,29 @@ function drawCar(ctx, design, x, y, scale, angle, wheelSpin, equip) {
     drawHat(ctx, geom.head.x, geom.head.y - geom.head.r, geom.head.r, equip.hat);
   }
 
-  // spoiler
+  // spoiler / rear wing
   if (design.spoiler) {
     ctx.fillStyle = c.accent;
-    ctx.fillRect(-30, -26, 8, 2.5);
-    ctx.fillRect(-27, -24, 2.5, 8);
+    if (design.body === 'f1') {
+      ctx.fillRect(-31, -19, 9, 3);        // big F1 rear wing
+      ctx.fillRect(-28, -16, 2.5, 6);
+      ctx.fillRect(20, -10, 9, 2.2);       // front wing
+    } else {
+      ctx.fillRect(-30, -26, 8, 2.5);
+      ctx.fillRect(-27, -24, 2.5, 8);
+    }
+  }
+
+  // police / fire light bar (flashes while driving)
+  if (design.lights) {
+    const roof = ROOF_Y[design.body] || -24;
+    const phase = Math.sin((wheelSpin || 0) * 6) > 0;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(-7, roof - 1.5, 14, 2.2);
+    ctx.fillStyle = phase ? '#ff2d2d' : '#7a1010';
+    ctx.fillRect(-6.5, roof - 5, 6, 3.8);
+    ctx.fillStyle = phase ? '#123a8a' : '#3f7bff';
+    ctx.fillRect(0.5, roof - 5, 6, 3.8);
   }
 
   // headlight + taillight

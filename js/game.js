@@ -7,6 +7,7 @@ function defaultSave() {
     wins: 0,
     difficulty: 'easy',
     coins: 0,
+    winProgress: 0,
     gear: { engine: 1, tyres: 'normal', driver: 'max', hat: 'none' },
     owned: { engines: [1], tyres: ['normal'], drivers: ['max', 'mia'], hats: ['none', 'cap'] },
   };
@@ -30,6 +31,14 @@ function unlockNext() {
   const next = CAR_DESIGNS.find(c => !save.unlocked.includes(c.id));
   if (next) { save.unlocked.push(next.id); persist(); }
   return next || null;
+}
+// New cars get harder to earn as the garage fills up.
+function winsNeededForNextCar() {
+  const n = save.unlocked.length;
+  if (n < 6) return 1;
+  if (n < 12) return 2;
+  if (n < 18) return 3;
+  return 4;
 }
 
 // ===================== Screen management =====================
@@ -208,9 +217,9 @@ const OPP_BASE_SPEED = [200, 260, 320];
 
 // ===================== Difficulty =====================
 const DIFFICULTIES = {
-  easy:   { label: 'Easy',   icon: '🐢', oppMult: 0.72, hearts: 5, caves: 1 },
-  medium: { label: 'Medium', icon: '🚗', oppMult: 1.0,  hearts: 3, caves: 2 },
-  hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.15, hearts: 3, caves: 3 },
+  easy:   { label: 'Easy',   icon: '🐢', oppMult: 0.72, hearts: 5, caves: 1, headStart: 900 },
+  medium: { label: 'Medium', icon: '🚗', oppMult: 1.0,  hearts: 3, caves: 2, headStart: 500 },
+  hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.15, hearts: 3, caves: 3, headStart: 250 },
 };
 function currentDifficulty() { return DIFFICULTIES[save.difficulty] || DIFFICULTIES.easy; }
 
@@ -362,10 +371,11 @@ function makeCoins(track) {
     const s0 = START_PAD + i * SEG_LEN;
     if (type === 'cave') return;
     if (type === 'coins') {
-      // a generous wavy line of coins across the whole segment
+      // a generous wavy line of coins across the whole segment,
+      // low enough to grab just by driving through
       for (let k = 0; k < 10; k++) {
         const cx = s0 + 90 + k * 78;
-        coins.push({ x: cx, y: track.ground(cx) - 75 - 30 * Math.abs(Math.sin(k * 0.9)), got: false });
+        coins.push({ x: cx, y: track.ground(cx) - 55 - 20 * Math.abs(Math.sin(k * 0.9)), got: false });
       }
     } else if (type === 'jump') {
       // coins along the flight path after the ramp crest
@@ -377,17 +387,23 @@ function makeCoins(track) {
     } else if (Math.random() < 0.45) {
       const cx = s0 + 330 + Math.random() * 200;
       for (let k = 0; k < 3; k++) {
-        coins.push({ x: cx + k * 55, y: track.ground(cx + k * 55) - 85, got: false });
+        coins.push({ x: cx + k * 55, y: track.ground(cx + k * 55) - 55, got: false });
       }
     }
   });
   return coins;
 }
 function makeOpponents() {
-  const mult = currentDifficulty().oppMult;
+  // rivals keep pace with his engine upgrades so wins stay earned
+  const engine = gearItem('engines', save.gear.engine);
+  const D = currentDifficulty();
+  const mult = D.oppMult * (1 + (engine.speed - 1) * 0.7);
   return OPP_BASE_SPEED.map((sp, i) => ({
     name: OPP_NAMES[i],
     speed: sp * mult * (0.95 + Math.random() * 0.12),
+    // rivals start ahead — races are chases (slowest gets the biggest lead)
+    x: 200 + D.headStart * (1 - i * 0.3),
+    slowUntil: 0,
     design: { body: i === 2 ? 'sporty' : i === 1 ? 'sedan' : 'truck', colors: { body: OPP_COLORS[i], accent: '#ffffff', window: '#111' }, decal: 'stripe', spoiler: i === 2 },
   }));
 }
@@ -446,7 +462,12 @@ function initRace(keepTrack) {
     caveWarned: track.caves.map(() => false),
     caveEntryHearts: track.caves.map(() => null),
     cavePraised: track.caves.map(() => false),
+    missiles: [],
+    booms: [],
+    fireCooldown: 0,
   };
+  // FIRE button only for weapon cars (tanks)
+  document.getElementById('fire-btn').classList.toggle('hidden', !getDesign(save.selected).weapon);
   document.getElementById('pause-overlay').classList.add('hidden');
   document.getElementById('result-overlay').classList.add('hidden');
   // dice = "give me a different track" — not offered on tracks he built himself
@@ -502,11 +523,24 @@ function bindPedal(el, prop) {
 bindPedal(gasEl, 'gas');
 bindPedal(brakeEl, 'brake');
 
+// tank missile fire
+function fireMissile() {
+  if (!race || race.state !== 'running' || race.fireCooldown > 0) return;
+  if (!getDesign(save.selected).weapon) return;
+  race.fireCooldown = 1.6;
+  race.missiles.push({ x: race.car.x + 45, y: race.car.y - 34, vx: Math.max(race.car.vx, 0) + 520 });
+  SFX.go();
+}
+const fireEl = document.getElementById('fire-btn');
+fireEl.addEventListener('pointerdown', (e) => { e.preventDefault(); fireMissile(); });
+fireEl.addEventListener('touchstart', (e) => { e.preventDefault(); fireMissile(); }, { passive: false });
+
 // keyboard (desktop testing)
 window.addEventListener('keydown', (e) => {
   if (!race) return;
   if (e.code === 'ArrowRight' || e.code === 'Space' || e.code === 'ArrowUp') { race.input.gas = true; gasEl.classList.add('pressed'); }
   if (e.code === 'ArrowLeft' || e.code === 'ArrowDown') { race.input.brake = true; brakeEl.classList.add('pressed'); }
+  if (e.code === 'KeyF') fireMissile();
   if (e.code === 'Escape') togglePause();
 });
 window.addEventListener('keyup', (e) => {
@@ -661,6 +695,31 @@ function updateRace(dt) {
 
   car.wheelSpin += (car.vx / WHEEL_R) * dt;
 
+  // opponents advance (missile hits slow them down)
+  for (const o of race.opponents) {
+    const slowed = race.elapsed < o.slowUntil;
+    o.x += o.speed * (slowed ? 0.45 : 1) * dt;
+  }
+
+  // missiles (tank cars only)
+  if (race.fireCooldown > 0) race.fireCooldown -= dt;
+  for (const m of race.missiles) {
+    m.x += m.vx * dt;
+    if (m.y > terra.ground(m.x) - 8 || m.x > car.x + 1400) { m.dead = true; race.booms.push({ x: m.x, y: terra.ground(m.x) - 12, t: 0 }); continue; }
+    for (const o of race.opponents) {
+      if (Math.abs(m.x - o.x) < 45 && Math.abs(m.y - (groundPose(o.x).y - 20)) < 70) {
+        m.dead = true;
+        o.slowUntil = race.elapsed + 3;
+        race.booms.push({ x: o.x, y: groundPose(o.x).y - 30, t: 0 });
+        SFX.crash();
+        break;
+      }
+    }
+  }
+  race.missiles = race.missiles.filter(m => !m.dead);
+  for (const b of race.booms) b.t += dt;
+  race.booms = race.booms.filter(b => b.t < 0.5);
+
   // spoken cave coaching: warn before, praise a clean pass
   race.track.caves.forEach((z, i) => {
     if (!race.caveWarned[i] && car.x > z.start - 600 && car.x < z.start) {
@@ -676,7 +735,7 @@ function updateRace(dt) {
 
   // coins
   for (const c of race.coinsList) {
-    if (!c.got && Math.abs(c.x - car.x) < 50 && Math.abs(c.y - car.y) < 70) {
+    if (!c.got && Math.abs(c.x - car.x) < 60 && Math.abs(c.y - car.y) < 95) {
       c.got = true;
       race.coins += 1;
       updateCoins();
@@ -695,7 +754,8 @@ function updateRace(dt) {
 
 function finishRace() {
   const results = [{ name: 'You', time: race.elapsed, isPlayer: true }];
-  race.opponents.forEach(o => results.push({ name: o.name, time: race.track.length / o.speed, isPlayer: false }));
+  // rivals' projected finish from where they actually are (missile slowdowns count)
+  race.opponents.forEach(o => results.push({ name: o.name, time: race.elapsed + (race.track.length - o.x) / o.speed, isPlayer: false }));
   results.sort((a, b) => a.time - b.time);
   const place = results.findIndex(r => r.isPlayer) + 1;
   setTimeout(() => showFinishOverlay(place), 500);
@@ -853,10 +913,47 @@ function renderRace() {
 
   // opponents
   for (const o of race.opponents) {
-    const ox = Math.min(o.speed * race.elapsed, race.track.length + 100);
+    const ox = Math.min(o.x, race.track.length + 100);
     if (ox < x0 - 100 || ox > x1 + 100) continue;
     const pose = groundPose(ox);
     drawCar(rctx, o.design, ox, pose.y, CAR_SCALE * 0.95, pose.slope, (ox / WHEEL_R));
+    if (race.elapsed < o.slowUntil) {
+      // smoke puffs over a missile-slowed rival
+      rctx.fillStyle = 'rgba(90,90,90,0.6)';
+      for (let i = 0; i < 3; i++) {
+        rctx.beginPath();
+        rctx.arc(ox - 10 + i * 14, pose.y - 55 - Math.sin(performance.now() / 120 + i) * 6, 8 + i * 2, 0, Math.PI * 2);
+        rctx.fill();
+      }
+    }
+  }
+
+  // missiles + explosions
+  for (const m of race.missiles) {
+    rctx.save();
+    rctx.translate(m.x, m.y);
+    rctx.fillStyle = '#495057';
+    rctx.beginPath();
+    rctx.roundRect(-14, -5, 24, 10, 4);
+    rctx.fill();
+    rctx.fillStyle = '#e63946';
+    rctx.beginPath();
+    rctx.moveTo(10, -5); rctx.lineTo(20, 0); rctx.lineTo(10, 5);
+    rctx.closePath(); rctx.fill();
+    rctx.fillStyle = '#ff7b00';
+    rctx.beginPath();
+    rctx.moveTo(-14, -3); rctx.lineTo(-24 - Math.random() * 6, 0); rctx.lineTo(-14, 3);
+    rctx.closePath(); rctx.fill();
+    rctx.restore();
+  }
+  for (const b of race.booms) {
+    const r = 18 + b.t * 130;
+    rctx.globalAlpha = Math.max(0, 1 - b.t * 2);
+    rctx.fillStyle = '#ff7b00';
+    rctx.beginPath(); rctx.arc(b.x, b.y, r, 0, Math.PI * 2); rctx.fill();
+    rctx.fillStyle = '#ffd60a';
+    rctx.beginPath(); rctx.arc(b.x, b.y, r * 0.55, 0, Math.PI * 2); rctx.fill();
+    rctx.globalAlpha = 1;
   }
 
   // player car
@@ -881,7 +978,7 @@ function renderRace() {
   // HUD progress markers
   document.getElementById('marker-player').style.left = Math.min(100, (car.x / race.track.length) * 100) + '%';
   race.opponents.forEach((o, i) => {
-    const pct = Math.min(100, ((o.speed * race.elapsed) / race.track.length) * 100);
+    const pct = Math.min(100, (o.x / race.track.length) * 100);
     document.getElementById('marker-opp' + i).style.left = pct + '%';
   });
 }
@@ -910,22 +1007,41 @@ function showFinishOverlay(place) {
   const panel = document.getElementById('result-panel');
   const suffix = place === 1 ? 'st' : place === 2 ? 'nd' : place === 3 ? 'rd' : 'th';
   let bodyHtml = '';
+  let unlocked = null;
   if (place === 1) {
     save.wins += 1;
-    const unlocked = unlockNext();
+    save.winProgress = (save.winProgress || 0) + 1;
+    const needed = winsNeededForNextCar();
+    const allDone = save.unlocked.length >= CAR_DESIGNS.length;
+    if (!allDone && save.winProgress >= needed) {
+      unlocked = unlockNext();
+      if (unlocked) save.winProgress = 0;
+    }
+    persist();
     SFX.win();
-    Speech.say(unlocked ? `You won the race! New car! ${unlocked.name}!` : 'You won the race! You are the champion!');
     if (unlocked) {
+      Speech.say(`You won the race! New car! ${unlocked.name}!`);
       bodyHtml = `
         <h2>🏆 You Won 1st Place!</h2>
         <p style="font-size:20px;color:#1d3557;font-weight:700;">New car unlocked!</p>
         <canvas id="unlock-canvas" width="160" height="120"></canvas>
         <p style="font-size:22px;color:#e63946;font-weight:800;">${unlocked.name}</p>
       `;
-    } else {
+    } else if (allDone) {
+      Speech.say('You won the race! You have every car! You are the champion!');
       bodyHtml = `
         <h2>🏆 You Won 1st Place!</h2>
         <p style="font-size:20px;color:#1d3557;font-weight:700;">You've unlocked every car! You're a champion! 🎉</p>
+      `;
+    } else {
+      const left = needed - save.winProgress;
+      Speech.say(`You won the race! Win ${left} more ${left === 1 ? 'race' : 'races'} to get a new car!`);
+      bodyHtml = `
+        <h2>🏆 You Won 1st Place!</h2>
+        <p style="font-size:20px;color:#1d3557;font-weight:700;">
+          ${'⭐'.repeat(save.winProgress)}${'☆'.repeat(left)}<br>
+          Win ${left} more ${left === 1 ? 'race' : 'races'} for a new car!
+        </p>
       `;
     }
   } else {
@@ -948,14 +1064,10 @@ function showFinishOverlay(place) {
     </div>
   `;
   document.getElementById('result-overlay').classList.remove('hidden');
-  if (place === 1) {
+  if (unlocked) {
     SFX.unlockCar();
     const cvs = document.getElementById('unlock-canvas');
-    if (cvs) {
-      const cctx = cvs.getContext('2d');
-      const unlocked = CAR_DESIGNS.find(c => save.unlocked[save.unlocked.length - 1] === c.id);
-      if (unlocked) drawCar(cctx, unlocked, 80, 78, 2.2, 0, 0);
-    }
+    if (cvs) drawCar(cvs.getContext('2d'), unlocked, 80, 78, 2.2, 0, 0);
   }
   document.getElementById('btn-race-again').addEventListener('click', () => { SFX.click(); initRace(true); });
   const buildBtn = document.getElementById('btn-result-build');
