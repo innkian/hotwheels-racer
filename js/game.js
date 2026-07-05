@@ -56,6 +56,7 @@ const screens = {
   listen: document.getElementById('screen-listen'),
   build: document.getElementById('screen-build'),
   workshop: document.getElementById('screen-workshop'),
+  multi: document.getElementById('screen-multi'),
 };
 let currentScreen = 'title';
 function showScreen(name) {
@@ -67,6 +68,8 @@ function showScreen(name) {
   if (name === 'listen' && window.initListen) window.initListen();
   if (name === 'build' && window.initBuild) window.initBuild();
   if (name === 'workshop' && window.initWorkshop) window.initWorkshop();
+  if (name === 'multi' && window.initMulti) window.initMulti();
+  if (name === 'title' && window.MP && MP.state.active) MP.leave();
 }
 
 // ===================== Title screen =====================
@@ -90,6 +93,7 @@ document.getElementById('btn-garage').addEventListener('click', () => { SFX.unlo
 document.getElementById('btn-listen').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('listen'); });
 document.getElementById('btn-build').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('build'); });
 document.getElementById('btn-workshop').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('workshop'); });
+document.getElementById('btn-multi').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('multi'); });
 
 // difficulty picker
 function renderDifficulty() {
@@ -840,6 +844,9 @@ function updateRace(dt) {
 
   car.wheelSpin += (car.vx / WHEEL_R) * dt;
 
+  // stream our position to the other player in a two-player race
+  if (window.MP && MP.state.active) MP.publish(car);
+
   // opponents advance (missile hits slow them down)
   for (const o of race.opponents) {
     const slowed = race.elapsed < o.slowUntil;
@@ -1007,6 +1014,7 @@ function updateRace(dt) {
 }
 
 function finishRace() {
+  if (window.MP && MP.state.active) MP.reportFinish();
   const results = [{ name: 'You', time: race.elapsed, isPlayer: true }];
   // rivals' projected finish from where they actually are (missile slowdowns count)
   race.opponents.forEach(o => results.push({ name: o.name, time: race.elapsed + (race.track.length - o.x) / o.speed, isPlayer: false }));
@@ -1325,6 +1333,21 @@ function renderRace() {
     rctx.stroke();
   }
 
+  // the other human player's car (two-player race)
+  if (window.MP && MP.state.active && MP.state.remote) {
+    const r = MP.state.remote;
+    if (!MP.state.remoteDisp) MP.state.remoteDisp = { x: r.x, y: r.y, a: r.a || 0 };
+    const d = MP.state.remoteDisp;
+    d.x += (r.x - d.x) * 0.2;
+    d.y += (r.y - d.y) * 0.2;
+    d.a += ((r.a || 0) - d.a) * 0.2;
+    drawCar(rctx, getDesign(r.car), d.x, d.y, CAR_SCALE, d.a, d.x / WHEEL_R);
+    rctx.fillStyle = '#1d3557';
+    rctx.font = 'bold 16px sans-serif';
+    rctx.textAlign = 'center';
+    rctx.fillText('⭐ Player 2', d.x, d.y - 60);
+  }
+
   // player car
   const design = getDesign(save.selected);
   const boosting = race.state === 'running' && race.input.gas && race.engineLevel >= 2;
@@ -1428,13 +1451,22 @@ function showFinishOverlay(place) {
     Speech.say('Good try! Race again and win a new car!');
   }
   bodyHtml += `<p style="font-size:18px;color:#b07d00;font-weight:700;">🪙 +${race.coins} coins · You have ${save.coins} — spend them in the Workshop!</p>`;
+  const isMP = window.MP && MP.state.active;
+  if (isMP) {
+    const won = MP.iWon();
+    bodyHtml = `<p style="font-size:22px;font-weight:800;color:${won ? '#2a9d4f' : '#e63946'};">
+      ${won ? '🏆 You finished before Player 2!' : '⭐ Player 2 finished first! Good race!'}</p>` + bodyHtml;
+    Speech.say(won ? 'You beat player two! Amazing!' : 'Player two was faster this time! Race again!', { interrupt: false });
+  }
   panel.innerHTML = bodyHtml + `
     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-      <button id="btn-race-again" class="big-btn">🔄 Race Again</button>
-      ${race.customTrack
-        ? '<button id="btn-result-build" class="big-btn orange">🧱 Build Again</button>'
-        : '<button id="btn-result-newtrack" class="big-btn orange">🎲 New Track</button>'}
-      <button id="btn-result-garage" class="big-btn blue">🚗 Garage</button>
+      ${isMP
+        ? '<button id="btn-result-multi" class="big-btn">👥 Race Again</button>'
+        : `<button id="btn-race-again" class="big-btn">🔄 Race Again</button>
+           ${race.customTrack
+             ? '<button id="btn-result-build" class="big-btn orange">🧱 Build Again</button>'
+             : '<button id="btn-result-newtrack" class="big-btn orange">🎲 New Track</button>'}
+           <button id="btn-result-garage" class="big-btn blue">🚗 Garage</button>`}
       <button id="btn-result-home" class="big-btn gray">🏠 Home</button>
     </div>
   `;
@@ -1444,12 +1476,16 @@ function showFinishOverlay(place) {
     const cvs = document.getElementById('unlock-canvas');
     if (cvs) drawCar(cvs.getContext('2d'), unlocked, 80, 78, 2.2, 0, 0);
   }
-  document.getElementById('btn-race-again').addEventListener('click', () => { SFX.click(); initRace(true); });
+  const againBtn = document.getElementById('btn-race-again');
+  if (againBtn) againBtn.addEventListener('click', () => { SFX.click(); initRace(true); });
   const buildBtn = document.getElementById('btn-result-build');
   if (buildBtn) buildBtn.addEventListener('click', () => { SFX.click(); showScreen('build'); });
   const newTrackBtn = document.getElementById('btn-result-newtrack');
   if (newTrackBtn) newTrackBtn.addEventListener('click', rollNewTrack);
-  document.getElementById('btn-result-garage').addEventListener('click', () => { SFX.click(); showScreen('garage'); });
+  const multiBtn = document.getElementById('btn-result-multi');
+  if (multiBtn) multiBtn.addEventListener('click', () => { SFX.click(); MP.leave(); showScreen('multi'); });
+  const garageBtn = document.getElementById('btn-result-garage');
+  if (garageBtn) garageBtn.addEventListener('click', () => { SFX.click(); showScreen('garage'); });
   document.getElementById('btn-result-home').addEventListener('click', () => { SFX.click(); showScreen('title'); });
 }
 

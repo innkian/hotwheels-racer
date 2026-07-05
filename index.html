@@ -12,11 +12,14 @@
   <section id="screen-title" class="screen active">
     <h1 class="logo">🏎️ Turbo Wheels Racing</h1>
     <div class="title-car-display"><canvas id="title-canvas"></canvas></div>
-    <button id="btn-play" class="big-btn">▶ RACE</button>
-    <button id="btn-listen" class="big-btn orange">👂 LISTEN &amp; FIND</button>
-    <button id="btn-build" class="big-btn purple">🧱 BUILD A TRACK</button>
-    <button id="btn-workshop" class="big-btn red">🔧 WORKSHOP <span id="title-wallet">🪙 0</span></button>
-    <button id="btn-garage" class="big-btn blue">🚗 GARAGE (<span id="garage-count">0/0</span>)</button>
+    <div id="title-buttons">
+      <button id="btn-play" class="big-btn">▶ RACE</button>
+      <button id="btn-listen" class="big-btn orange">👂 LISTEN &amp; FIND</button>
+      <button id="btn-multi" class="big-btn teal">👥 2 PLAYERS</button>
+      <button id="btn-build" class="big-btn purple">🧱 BUILD A TRACK</button>
+      <button id="btn-workshop" class="big-btn red">🔧 WORKSHOP <span id="title-wallet">🪙 0</span></button>
+      <button id="btn-garage" class="big-btn blue">🚗 GARAGE (<span id="garage-count">0/0</span>)</button>
+    </div>
     <div id="difficulty-row">
       <button class="diff-btn" data-diff="easy">🐢<span>EASY</span></button>
       <button class="diff-btn" data-diff="medium">🚗<span>MEDIUM</span></button>
@@ -76,6 +79,34 @@
       <button class="shop-tab" data-cat="trails">🌈<span>TRAILS</span></button>
     </div>
     <div id="shop-grid"></div>
+  </section>
+
+  <section id="screen-multi" class="screen">
+    <div id="multi-hud">
+      <button id="btn-multi-back" class="mini-btn">⬅</button>
+      <h2>👥 Two Players</h2>
+      <div></div>
+    </div>
+    <div id="multi-select">
+      <button id="btn-multi-create" class="big-btn">🅰 CREATE A RACE</button>
+      <button id="btn-multi-join" class="big-btn blue">🅱 JOIN A RACE</button>
+      <p class="multi-hint">One player creates the race, the other joins with the secret code!</p>
+    </div>
+    <div id="multi-wait" class="hidden">
+      <p class="multi-hint">Tell the other player the secret code:</p>
+      <div id="multi-code">···</div>
+      <p id="multi-wait-status" class="multi-hint">Waiting for Player 2…</p>
+      <button id="btn-multi-cancel" class="big-btn gray">Cancel</button>
+    </div>
+    <div id="multi-join" class="hidden">
+      <div id="multi-slots">· · ·</div>
+      <div id="multi-letters"></div>
+      <div style="display:flex; gap:10px;">
+        <button id="btn-multi-clear" class="big-btn gray">⌫</button>
+        <button id="btn-multi-go" class="big-btn">GO!</button>
+      </div>
+    </div>
+    <div id="multi-error" class="hidden"></div>
   </section>
 
   <div id="grownups-overlay" class="overlay hidden">
@@ -144,5 +175,9 @@
 <script src="js/listen.js"></script>
 <script src="js/builder.js"></script>
 <script src="js/workshop.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/multiplayer.js"></script>
 </body>
 </html>

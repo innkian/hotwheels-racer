@@ -48,6 +48,7 @@ html, body {
 .big-btn.gray { background: #6c757d; box-shadow: 0 6px 0 #495057, 0 8px 14px rgba(0,0,0,0.3); }
 .big-btn.orange { background: #f77f00; box-shadow: 0 6px 0 #b25b00, 0 8px 14px rgba(0,0,0,0.3); }
 .big-btn.purple { background: #7b2cbf; box-shadow: 0 6px 0 #4d1a78, 0 8px 14px rgba(0,0,0,0.3); }
+.big-btn.teal { background: #0f9b8e; box-shadow: 0 6px 0 #0a6a61, 0 8px 14px rgba(0,0,0,0.3); }
 .big-btn:disabled { opacity: 0.45; }
 
 /* ---------- Difficulty picker ---------- */
@@ -184,6 +185,62 @@ html, body {
   border: none; border-radius: 12px; padding: 8px 14px; cursor: pointer;
 }
 .title-footer { display: flex; gap: 12px; margin-top: 6px; }
+#title-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: min(88vw, 480px);
+}
+#title-buttons .big-btn { width: 100%; margin: 0; font-size: clamp(15px, 3.2vw, 20px); }
+#title-buttons #btn-play { grid-column: 1 / -1; }
+
+/* ---------- Two Players ---------- */
+#screen-multi { padding: 14px; gap: 14px; justify-content: flex-start; }
+#multi-hud {
+  width: 100%; max-width: 920px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+#multi-hud h2 { margin: 0; color: #1d3557; font-size: clamp(18px, 4vw, 28px); }
+#multi-select, #multi-wait, #multi-join {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  margin-top: 4vh;
+}
+#multi-select.hidden, #multi-wait.hidden, #multi-join.hidden { display: none; }
+.multi-hint { font-size: 16px; color: #1d3557; font-weight: 600; margin: 0; text-align: center; }
+#multi-code {
+  font-size: 84px; font-weight: 900; letter-spacing: 18px;
+  color: #e63946; text-shadow: 3px 3px 0 #ffd60a;
+  background: rgba(255,255,255,0.85);
+  border-radius: 20px; padding: 8px 20px 8px 38px;
+}
+#multi-slots {
+  font-size: 56px; font-weight: 900; letter-spacing: 12px;
+  color: #1d3557;
+  background: rgba(255,255,255,0.85);
+  border-radius: 16px; padding: 4px 24px;
+  min-width: 220px; text-align: center;
+}
+#multi-letters {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+  width: min(92vw, 560px);
+}
+.letter-btn {
+  font-size: 22px; font-weight: 800; color: #1d3557;
+  background: rgba(255,255,255,0.9);
+  border: none; border-radius: 12px;
+  padding: 10px 0; cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.15);
+}
+.letter-btn:active { transform: translateY(2px); box-shadow: none; }
+#multi-error {
+  font-size: 17px; font-weight: 700; color: #e63946;
+  background: rgba(255,255,255,0.9);
+  border-radius: 14px; padding: 10px 18px;
+  text-align: center;
+}
+#multi-error.hidden { display: none; }
 
 /* ---------- Listen & Find ---------- */
 #screen-listen { padding: 12px; gap: 12px; }
