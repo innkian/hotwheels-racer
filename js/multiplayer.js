@@ -48,16 +48,19 @@ const MP = (() => {
   }
 
   // ---------- room lifecycle ----------
-  async function createRoom() {
+  async function createRoom(mode) {
     const d = getDb();
     if (!d) throw new Error('no-sdk');
     const code = randomCode();
     const segs = randomSegments();
+    const seed = Math.floor(Math.random() * 2147483647);
     roomRef = d.ref('rooms/' + code);
     await Promise.race([
       roomRef.set({
         created: firebase.database.ServerValue.TIMESTAMP,
         track: encodeTrack(segs),
+        seed,
+        mode: mode || 'race',
         state: 'waiting',
       }),
       timeout(6000),
@@ -71,7 +74,7 @@ const MP = (() => {
       if (snap.exists() && state.phase === 'waiting') {
         state.phase = 'racing';
         roomRef.child('state').set('racing');
-        beginRace(segs);
+        beginRace(segs, { mode: mode || 'race', seed });
       }
     });
     return code;
@@ -95,12 +98,12 @@ const MP = (() => {
     roomRef.child('state').on('value', s => {
       if (s.val() === 'racing' && state.phase === 'joining') {
         state.phase = 'racing';
-        beginRace(segs);
+        beginRace(segs, { mode: room.mode || 'race', seed: room.seed });
       }
     });
   }
 
-  function beginRace(segs) {
+  function beginRace(segs, opts) {
     state.active = true;
     state.remote = null;
     state.remoteDisp = null;
@@ -116,8 +119,19 @@ const MP = (() => {
     roomRef.child('winner').on('value', snap => {
       if (snap.val()) state.winner = snap.val();
     });
-    startCustomRace(segs);
-    Speech.say('Player 2 is here! Ready to race!');
+    // share our car's design so custom-built cars render on the other device
+    const myDesign = getDesign(save.selected);
+    roomRef.child('players/' + state.role).update({
+      design: {
+        name: myDesign.name, body: myDesign.body, colors: myDesign.colors,
+        decal: myDesign.decal, spoiler: !!myDesign.spoiler,
+        lights: !!myDesign.lights, weapon: !!myDesign.weapon,
+      },
+    });
+    startCustomRace(segs, opts);
+    Speech.say(opts && opts.mode === 'drive'
+      ? 'Player 2 is here! Time for a long, long drive!'
+      : 'Player 2 is here! Ready to race!');
   }
 
   // ---------- during the race (called from game.js) ----------
@@ -186,13 +200,13 @@ window.MP = MP;
     Speech.say(msg);
   }
 
-  document.getElementById('btn-multi-create').addEventListener('click', async () => {
+  async function createFlow(mode) {
     SFX.click();
     if (!MP.sdkReady()) { showError('Two-player racing needs one more setup step. Ask a grown-up!'); return; }
     showPart('wait');
     document.getElementById('multi-code').textContent = '…';
     try {
-      const code = await MP.createRoom();
+      const code = await MP.createRoom(mode);
       document.getElementById('multi-code').textContent = code;
       Speech.say('Tell the other player the secret code: ' + code.split('').join('. ') + '.');
     } catch (e) {
@@ -201,7 +215,9 @@ window.MP = MP;
         ? 'Two-player racing needs one more setup step. Ask a grown-up!'
         : 'Something went wrong. Try again!');
     }
-  });
+  }
+  document.getElementById('btn-multi-create').addEventListener('click', () => createFlow('race'));
+  document.getElementById('btn-multi-drive').addEventListener('click', () => createFlow('drive'));
 
   document.getElementById('btn-multi-join').addEventListener('click', () => {
     SFX.click();

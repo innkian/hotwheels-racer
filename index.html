@@ -17,6 +17,7 @@
       <button id="btn-listen" class="big-btn orange">👂 LISTEN &amp; FIND</button>
       <button id="btn-multi" class="big-btn teal">👥 2 PLAYERS</button>
       <button id="btn-build" class="big-btn purple">🧱 BUILD A TRACK</button>
+      <button id="btn-maker" class="big-btn pink">🏭 CAR MAKER</button>
       <button id="btn-workshop" class="big-btn red">🔧 WORKSHOP <span id="title-wallet">🪙 0</span></button>
       <button id="btn-garage" class="big-btn blue">🚗 GARAGE (<span id="garage-count">0/0</span>)</button>
     </div>
@@ -88,9 +89,10 @@
       <div></div>
     </div>
     <div id="multi-select">
-      <button id="btn-multi-create" class="big-btn">🅰 CREATE A RACE</button>
-      <button id="btn-multi-join" class="big-btn blue">🅱 JOIN A RACE</button>
-      <p class="multi-hint">One player creates the race, the other joins with the secret code!</p>
+      <button id="btn-multi-create" class="big-btn">🏁 CREATE A RACE</button>
+      <button id="btn-multi-drive" class="big-btn teal">🛣 CREATE A LONG DRIVE</button>
+      <button id="btn-multi-join" class="big-btn blue">🔑 JOIN WITH A CODE</button>
+      <p class="multi-hint">One player creates, the other joins with the secret code!<br>A Long Drive never ends — cruise together forever!</p>
     </div>
     <div id="multi-wait" class="hidden">
       <p class="multi-hint">Tell the other player the secret code:</p>
@@ -109,6 +111,29 @@
     <div id="multi-error" class="hidden"></div>
   </section>
 
+  <section id="screen-maker" class="screen">
+    <div id="maker-hud">
+      <button id="btn-maker-back" class="mini-btn">⬅</button>
+      <h2>🏭 Car Maker</h2>
+      <div id="maker-wallet">🪙 0</div>
+    </div>
+    <div id="maker-preview"><canvas id="maker-canvas"></canvas></div>
+    <div id="maker-rows">
+      <div class="maker-label">BODY</div>
+      <div class="maker-row" id="maker-bodies"></div>
+      <div class="maker-label">PAINT</div>
+      <div class="maker-row" id="maker-colors"></div>
+      <div class="maker-label">STICKERS</div>
+      <div class="maker-row" id="maker-decals"></div>
+      <div class="maker-label">STICKER COLOR</div>
+      <div class="maker-row" id="maker-accents"></div>
+    </div>
+    <div id="maker-actions">
+      <button id="btn-maker-wing" class="mini-btn">🪽 WING: ON</button>
+      <button id="btn-maker-save" class="big-btn">🏭 BUILD IT!</button>
+    </div>
+  </section>
+
   <div id="grownups-overlay" class="overlay hidden">
     <div class="panel" id="grownups-panel"></div>
   </div>
@@ -123,6 +148,7 @@
     <div id="race-hud">
       <div id="hearts">❤️❤️❤️</div>
       <div id="coin-count">🪙 0</div>
+      <div id="distance-hud" class="hidden">🛣 0 m</div>
       <div id="race-track-bar">
         <div class="track-line">
           <div class="marker player" id="marker-player"></div>
@@ -175,6 +201,7 @@
 <script src="js/listen.js"></script>
 <script src="js/builder.js"></script>
 <script src="js/workshop.js"></script>
+<script src="js/carmaker.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script src="js/firebase-config.js"></script>

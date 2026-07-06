@@ -49,6 +49,7 @@ html, body {
 .big-btn.orange { background: #f77f00; box-shadow: 0 6px 0 #b25b00, 0 8px 14px rgba(0,0,0,0.3); }
 .big-btn.purple { background: #7b2cbf; box-shadow: 0 6px 0 #4d1a78, 0 8px 14px rgba(0,0,0,0.3); }
 .big-btn.teal { background: #0f9b8e; box-shadow: 0 6px 0 #0a6a61, 0 8px 14px rgba(0,0,0,0.3); }
+.big-btn.pink { background: #d6336c; box-shadow: 0 6px 0 #93214a, 0 8px 14px rgba(0,0,0,0.3); }
 .big-btn:disabled { opacity: 0.45; }
 
 /* ---------- Difficulty picker ---------- */
@@ -457,4 +458,70 @@ html, body {
 #flash-overlay {
   position: absolute; inset: 0; background: #ff0000; opacity: 0;
   pointer-events: none; z-index: 15;
+}
+
+
+/* ---------- Distance odometer (long drives) ---------- */
+#distance-hud {
+  font-size: 20px; font-weight: 800; color: #1d3557;
+  background: rgba(255,255,255,0.75);
+  border-radius: 12px; padding: 4px 12px;
+  flex: 1; text-align: center;
+}
+#distance-hud.hidden, #race-track-bar.hidden { display: none; }
+
+/* ---------- Car Maker ---------- */
+#screen-maker { padding: 12px; gap: 8px; }
+#maker-hud {
+  width: 100%; max-width: 920px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+#maker-hud h2 { margin: 0; color: #1d3557; font-size: clamp(18px, 4vw, 28px); }
+#maker-wallet {
+  font-size: 18px; font-weight: 800; color: #7a5c00;
+  background: rgba(255, 214, 10, 0.75);
+  border-radius: 12px; padding: 5px 12px;
+}
+#maker-preview {
+  width: 100%; max-width: 920px;
+  background: rgba(255,255,255,0.55);
+  border-radius: 16px;
+}
+#maker-canvas { width: 100%; height: 118px; display: block; }
+#maker-rows {
+  flex: 1; width: 100%; max-width: 920px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.maker-label { font-size: 12px; font-weight: 800; color: #1d3557; opacity: 0.75; }
+.maker-row {
+  display: flex; gap: 8px; overflow-x: auto; padding: 3px 2px;
+  flex-shrink: 0;
+}
+.maker-piece {
+  flex-shrink: 0; width: 92px;
+  background: rgba(255,255,255,0.9);
+  border: 3px solid transparent; border-radius: 12px;
+  padding: 4px; cursor: pointer; text-align: center;
+}
+.maker-piece.selected { border-color: #2a9d4f; background: #d8f3dc; }
+.maker-piece canvas { width: 100%; height: 46px; display: block; }
+.maker-piece-label { font-size: 11px; font-weight: 800; color: #1d3557; }
+.maker-swatch {
+  flex-shrink: 0; width: 44px; height: 44px;
+  border: 3px solid rgba(0,0,0,0.2); border-radius: 12px;
+  cursor: pointer;
+}
+.maker-swatch.selected { border-color: #1d3557; transform: scale(1.12); }
+.maker-chip {
+  flex-shrink: 0;
+  font-size: 15px; font-weight: 800; color: #1d3557;
+  background: rgba(255,255,255,0.9);
+  border: 3px solid transparent; border-radius: 12px;
+  padding: 9px 12px; cursor: pointer;
+}
+.maker-chip.selected { border-color: #2a9d4f; background: #d8f3dc; }
+#maker-actions {
+  width: 100%; max-width: 920px;
+  display: flex; gap: 12px; align-items: center; justify-content: center;
 }

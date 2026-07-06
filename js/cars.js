@@ -27,6 +27,13 @@ const CAR_DESIGNS = [
   { id: 'c22', name: 'Fire Rescue',  body: 'truck',  colors: { body: '#d00000', accent: '#ffd60a', window: '#1b1b1b' }, decal: 'stripe',  spoiler: false, lights: true,  typeWord: 'fire truck' },
   { id: 'c23', name: 'Steel Tank',   body: 'tank',   colors: { body: '#6c757d', accent: '#343a40', window: '#1b1b1b' }, decal: 'camo',    spoiler: false, weapon: true,  typeWord: 'tank' },
   { id: 'c24', name: 'Golden F1',    body: 'f1',     colors: { body: '#ffbf00', accent: '#7f5539', window: '#111111' }, decal: 'stars',   spoiler: true,  typeWord: 'formula one car' },
+  { id: 'c25', name: 'Blue 911',     body: 'porsche',  colors: { body: '#2b6cff', accent: '#f4f4f4', window: '#12263a' }, decal: 'none',   spoiler: false },
+  { id: 'c26', name: 'Blue Spyder',  body: 'porsche',  colors: { body: '#48cae4', accent: '#023e8a', window: '#12263a' }, decal: 'stripe', spoiler: true  },
+  { id: 'c27', name: 'Blue GT Cup',  body: 'porsche',  colors: { body: '#1d4ed8', accent: '#ffd60a', window: '#0a0a0a' }, decal: 'stripe', spoiler: true  },
+  { id: 'c28', name: 'Rosso Red',    body: 'ferrari',  colors: { body: '#d90429', accent: '#ffd60a', window: '#0a0a0a' }, decal: 'none',   spoiler: true  },
+  { id: 'c29', name: 'Rosso Yellow', body: 'ferrari',  colors: { body: '#ffd60a', accent: '#1b1b1b', window: '#0a0a0a' }, decal: 'stripe', spoiler: true  },
+  { id: 'c30', name: 'Defender Green', body: 'defender', colors: { body: '#3a5a40', accent: '#dad7cd', window: '#1b1b1b' }, decal: 'none', spoiler: false, typeWord: 'jeep' },
+  { id: 'c31', name: 'Defender Sand',  body: 'defender', colors: { body: '#d4a373', accent: '#6b4220', window: '#1b1b1b' }, decal: 'camo', spoiler: false, typeWord: 'jeep' },
 ];
 
 // Spoken-word attributes for the listening game. Color words are what a
@@ -37,13 +44,15 @@ const CAR_WORDS = {
   c11: 'white', c12: 'purple', c13: 'green', c14: 'blue',   c15: 'red',
   c16: 'white', c17: 'red',    c18: 'green', c19: 'yellow', c20: 'black',
   c21: 'silver', c22: 'red',   c23: 'silver', c24: 'gold',
+  c25: 'blue', c26: 'blue', c27: 'blue', c28: 'red', c29: 'yellow',
+  c30: 'green', c31: 'yellow',
 };
-const TYPE_WORDS = { sporty: 'race car', sedan: 'race car', muscle: 'race car', truck: 'truck', buggy: 'buggy', f1: 'race car', tank: 'tank' };
+const TYPE_WORDS = { sporty: 'race car', sedan: 'race car', muscle: 'race car', truck: 'truck', buggy: 'buggy', f1: 'race car', tank: 'tank', porsche: 'race car', ferrari: 'race car', defender: 'truck' };
 const DECAL_WORDS = { flames: 'flames', stripe: 'stripes', stars: 'stars', camo: 'spots', none: null };
 
 function carWords(design) {
   return {
-    color: CAR_WORDS[design.id] || 'red',
+    color: design.colorWord || CAR_WORDS[design.id] || 'red',
     type: design.typeWord || TYPE_WORDS[design.body] || 'race car',
     decal: DECAL_WORDS[design.decal] || null,
   };
@@ -119,9 +128,12 @@ const BODY_GEOM = {
   buggy:  { wheelR: 10,  head: { x: -1, y: -16, r: 5.2 } },
   f1:     { wheelR: 8,   head: { x: -4, y: -17, r: 3.8 } },
   tank:   { wheelR: 8,   head: { x: -2, y: -29, r: 4 } },
+  porsche:  { wheelR: 8.5,  head: { x: -4, y: -16, r: 4 } },
+  ferrari:  { wheelR: 8.5,  head: { x: -9, y: -14, r: 3.8 } },
+  defender: { wheelR: 10.5, head: { x: -8, y: -20, r: 4.6 } },
 };
 // roof line for police/fire light bars
-const ROOF_Y = { sedan: -24, sporty: -24, muscle: -23, truck: -30, buggy: -22, f1: -16, tank: -26 };
+const ROOF_Y = { sedan: -24, sporty: -24, muscle: -23, truck: -30, buggy: -22, f1: -16, tank: -26, porsche: -22, ferrari: -19, defender: -26 };
 
 function bodyPath(body) {
   const p = new Path2D();
@@ -182,6 +194,37 @@ function bodyPath(body) {
     p.lineTo(21, -15);
     p.lineTo(26, -4);
     p.closePath();
+  } else if (body === 'porsche') {
+    // classic rounded 911 silhouette: sloping rear deck, curved roof, long nose
+    p.moveTo(-27, -3);
+    p.lineTo(-27, -9);
+    p.quadraticCurveTo(-26, -14, -19, -15);
+    p.quadraticCurveTo(-13, -22, -3, -22.5);
+    p.quadraticCurveTo(9, -21, 15, -13);
+    p.quadraticCurveTo(24, -11, 27, -7);
+    p.lineTo(27, -3);
+    p.closePath();
+  } else if (body === 'ferrari') {
+    // low mid-engine wedge: high tail, cockpit forward, knife nose
+    p.moveTo(-28, -3);
+    p.lineTo(-28, -11);
+    p.lineTo(-20, -13);
+    p.lineTo(-16, -19);
+    p.lineTo(-4, -19);
+    p.quadraticCurveTo(6, -18, 12, -9);
+    p.lineTo(26, -7);
+    p.lineTo(28, -4);
+    p.lineTo(28, -3);
+    p.closePath();
+  } else if (body === 'defender') {
+    // boxy 4x4: flat long roof, stepped bonnet
+    p.moveTo(-26, -4);
+    p.lineTo(-26, -26);
+    p.lineTo(10, -26);
+    p.lineTo(12, -15);
+    p.lineTo(27, -14);
+    p.lineTo(27, -4);
+    p.closePath();
   } else { // buggy
     p.moveTo(-24, -3);
     p.quadraticCurveTo(-26, -20, -8, -22);
@@ -206,6 +249,12 @@ function windowPath(body) {
     p.moveTo(-9, -15); p.lineTo(-2, -15); p.lineTo(2, -11); p.lineTo(-10, -11); p.closePath();
   } else if (body === 'tank') {
     p.moveTo(-9, -24); p.lineTo(-2, -24); p.lineTo(-2, -18); p.lineTo(-9, -18); p.closePath();
+  } else if (body === 'porsche') {
+    p.moveTo(-13, -19.5); p.lineTo(-1, -19.5); p.quadraticCurveTo(6, -18, 10, -13); p.lineTo(-14, -13); p.closePath();
+  } else if (body === 'ferrari') {
+    p.moveTo(-14, -17); p.lineTo(-5, -17); p.lineTo(1, -10.5); p.lineTo(-16, -10.5); p.closePath();
+  } else if (body === 'defender') {
+    p.moveTo(-22, -24); p.lineTo(7, -24); p.lineTo(8, -17); p.lineTo(-22, -17); p.closePath();
   } else { // buggy
     p.moveTo(-8, -20); p.lineTo(6, -19); p.lineTo(10, -13); p.lineTo(-10, -13); p.closePath();
   }
@@ -437,6 +486,18 @@ function drawCar(ctx, design, x, y, scale, angle, wheelSpin, equip) {
     ctx.fill();
   }
 
+  // defender spare wheel on the tailgate
+  if (design.body === 'defender') {
+    ctx.fillStyle = '#1b1b1b';
+    ctx.beginPath();
+    ctx.arc(-26, -12, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#495057';
+    ctx.beginPath();
+    ctx.arc(-26, -12, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // window
   ctx.fillStyle = c.window;
   ctx.fill(windowPath(design.body));
@@ -454,6 +515,11 @@ function drawCar(ctx, design, x, y, scale, angle, wheelSpin, equip) {
       ctx.fillRect(-31, -19, 9, 3);        // big F1 rear wing
       ctx.fillRect(-28, -16, 2.5, 6);
       ctx.fillRect(20, -10, 9, 2.2);       // front wing
+    } else if (design.body === 'porsche') {
+      ctx.fillRect(-28, -18, 10, 2.5);     // duck tail
+    } else if (design.body === 'ferrari') {
+      ctx.fillRect(-30, -20, 10, 2.5);     // low rear wing
+      ctx.fillRect(-27, -18, 2.5, 5);
     } else {
       ctx.fillRect(-30, -26, 8, 2.5);
       ctx.fillRect(-27, -24, 2.5, 8);
