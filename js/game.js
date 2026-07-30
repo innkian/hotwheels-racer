@@ -267,8 +267,8 @@ const OPP_BASE_SPEED = [200, 260, 320];
 // ===================== Difficulty =====================
 const DIFFICULTIES = {
   easy:   { label: 'Easy',   icon: '🐢', oppMult: 0.72, hearts: 5, caves: 1, headStart: 900, hazards: 0, hazardPool: [], rockRate: 1.6 },
-  medium: { label: 'Medium', icon: '🚗', oppMult: 1.0,  hearts: 3, caves: 2, headStart: 500, hazards: 1, hazardPool: ['water', 'rocks'], rockRate: 1.4 },
-  hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.15, hearts: 3, caves: 3, headStart: 250, hazards: 2, hazardPool: ['water', 'rocks', 'steep'], rockRate: 1.0 },
+  medium: { label: 'Medium', icon: '🚗', oppMult: 1.12, hearts: 3, caves: 2, headStart: 500, hazards: 1, hazardPool: ['water', 'rocks'], rockRate: 1.4 },
+  hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.32, hearts: 3, caves: 3, headStart: 250, hazards: 2, hazardPool: ['water', 'rocks', 'steep'], rockRate: 1.0 },
 };
 function currentDifficulty() { return DIFFICULTIES[save.difficulty] || DIFFICULTIES.easy; }
 
@@ -562,7 +562,7 @@ function makeOpponents() {
   // rivals keep pace with his engine upgrades so wins stay earned
   const engine = gearItem('engines', save.gear.engine);
   const D = currentDifficulty();
-  const mult = D.oppMult * (1 + (engine.speed - 1) * 0.7);
+  const mult = D.oppMult * (1 + (engine.speed - 1) * 0.8);  // rivals nearly match his engine upgrades
   return OPP_BASE_SPEED.map((sp, i) => ({
     name: OPP_NAMES[i],
     speed: sp * mult * (0.95 + Math.random() * 0.12),
@@ -623,6 +623,7 @@ function initRace(keepTrack) {
     steepFails: 0,
     steepFailCooldown: 0,
     magicBoost: 0,
+    dizzy: 0,
     state: 'countdown', // countdown | running | paused | crashed | finished
     countdownVal: 3,
     countdownTimer: 0,
@@ -650,7 +651,8 @@ function initRace(keepTrack) {
     hornCooldown: 0,
   };
   // FIRE button only for weapon cars (tanks)
-  document.getElementById('fire-btn').classList.toggle('hidden', !getDesign(save.selected).weapon);
+  const canFire = getDesign(save.selected).weapon || (window.MP && MP.state.active);
+  document.getElementById('fire-btn').classList.toggle('hidden', !canFire);
   document.getElementById('pause-overlay').classList.add('hidden');
   document.getElementById('result-overlay').classList.add('hidden');
   // dice = "give me a different track" — not offered on tracks he built himself
@@ -709,14 +711,31 @@ function bindPedal(el, prop) {
 bindPedal(gasEl, 'gas');
 bindPedal(brakeEl, 'brake');
 
-// tank missile fire
+// missile fire: tanks always; every car in a two-player battle
 function fireMissile() {
   if (!race || race.state !== 'running' || race.fireCooldown > 0) return;
-  if (!getDesign(save.selected).weapon) return;
-  race.fireCooldown = 1.6;
+  const isTank = getDesign(save.selected).weapon;
+  const inMP = window.MP && MP.state.active;
+  if (!isTank && !inMP) return;
+  race.fireCooldown = isTank ? 1.4 : 2.4;
   race.missiles.push({ x: race.car.x + 45, y: race.car.y - 34, vx: Math.max(race.car.vx, 0) + 520 });
   SFX.go();
 }
+
+// hit by the other player's missile: dizzy spin-out, no heart lost
+window.applySpinout = () => {
+  if (!race || race.state !== 'running') return;
+  const car = race.car;
+  car.stunTimer = 1.3;
+  race.dizzy = 1.7;
+  car.vx *= 0.35;
+  if (!car.grounded) car.angVel = 6;
+  race.flash = 0.6;
+  race.booms.push({ x: car.x, y: car.y - 20, t: 0 });
+  SFX.crash();
+  if (navigator.vibrate) navigator.vibrate(150);
+  Speech.say('Whoa! You got hit! Spinning!');
+};
 const fireEl = document.getElementById('fire-btn');
 fireEl.addEventListener('pointerdown', (e) => { e.preventDefault(); fireMissile(); });
 fireEl.addEventListener('touchstart', (e) => { e.preventDefault(); fireMissile(); }, { passive: false });
@@ -845,6 +864,7 @@ function updateRace(dt) {
   const waterZone = terra.waterAt ? terra.waterAt(car.x) : null;
   const submerged = waterZone && car.y > terra.surface(car.x) + 6;
   if (race.magicBoost > 0) race.magicBoost -= dt;
+  if (race.dizzy > 0) race.dizzy -= dt;
 
   if (car.grounded) {
     const pose = groundPose(car.x, car.y);
@@ -940,7 +960,16 @@ function updateRace(dt) {
   // opponents advance (missile hits slow them down)
   for (const o of race.opponents) {
     const slowed = race.elapsed < o.slowUntil;
-    o.x += o.speed * (slowed ? 0.45 : 1) * dt;
+    let sp = o.speed;
+    // rivals respect the same obstacles the player does
+    if (race.track.caves.some(z => o.x > z.start - 150 && o.x < z.end)) sp *= 0.62;
+    else if (race.track.waters.some(z => o.x > z.start && o.x < z.end)) sp *= 0.55;
+    else if (race.track.steeps.some(z => o.x > z.start && o.x < z.end)) sp *= 0.7;
+    // rubber-band: chase harder when dropped, ease up when far ahead
+    const gap = car.x - o.x;
+    if (gap > 800) sp *= 1.06;
+    else if (gap < -1200) sp *= 0.94;
+    o.x += sp * (slowed ? 0.45 : 1) * dt;
   }
 
   // missiles (tank cars only)
@@ -955,6 +984,17 @@ function updateRace(dt) {
         race.booms.push({ x: o.x, y: groundPose(o.x).y - 30, t: 0 });
         SFX.crash();
         break;
+      }
+    }
+    // the other kid's car is a target too (two-player battles)
+    if (!m.dead && window.MP && MP.state.active && MP.state.remote) {
+      const r = MP.state.remote;
+      if (Math.abs(m.x - r.x) < 50 && Math.abs(m.y - (r.y - 20)) < 70) {
+        m.dead = true;
+        race.booms.push({ x: r.x, y: r.y - 25, t: 0 });
+        SFX.coin();
+        Speech.say('Direct hit!');
+        MP.sendHit();
       }
     }
   }
@@ -1429,6 +1469,15 @@ function renderRace() {
       rctx.beginPath(); rctx.arc(p.x, p.y - p.t * 45, 8 * fade + 2, 0, Math.PI * 2); rctx.fill();
     }
     rctx.globalAlpha = 1;
+  }
+
+  // dizzy stars circling the car after a missile spin-out
+  if (race.dizzy > 0) {
+    rctx.fillStyle = '#ffd60a';
+    for (let i = 0; i < 4; i++) {
+      const a = performance.now() / 150 + i * Math.PI / 2;
+      drawStar(rctx, race.car.x + Math.cos(a) * 42, race.car.y - 55 + Math.sin(a) * 10, 7);
+    }
   }
 
   // shield bubble around the car while charged

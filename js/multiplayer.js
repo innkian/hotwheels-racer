@@ -103,6 +103,14 @@ const MP = (() => {
     });
   }
 
+  let lastHitSeen = 0;
+  // tell the other device its car was hit by our missile
+  function sendHit() {
+    if (!state.active || !roomRef) return;
+    const other = state.role === 'host' ? 'guest' : 'host';
+    roomRef.child('players/' + other + '/hit').set(Date.now());
+  }
+
   function beginRace(segs, opts) {
     state.active = true;
     state.remote = null;
@@ -118,6 +126,16 @@ const MP = (() => {
     });
     roomRef.child('winner').on('value', snap => {
       if (snap.val()) state.winner = snap.val();
+    });
+    // spin out when the other player's missile tags us
+    lastHitSeen = 0;
+    roomRef.child('players/' + state.role + '/hit').on('value', snap => {
+      const t = snap.val();
+      if (t && t !== lastHitSeen) {
+        const first = lastHitSeen === 0 && Date.now() - t > 5000; // ignore stale hits from old rounds
+        lastHitSeen = t;
+        if (!first && window.applySpinout) window.applySpinout();
+      }
     });
     // share our car's design so custom-built cars render on the other device
     const myDesign = getDesign(save.selected);
@@ -175,7 +193,7 @@ const MP = (() => {
     state.winner = null;
   }
 
-  return { state, createRoom, joinRoom, publish, reportFinish, iWon, leave, sdkReady };
+  return { state, createRoom, joinRoom, publish, reportFinish, sendHit, iWon, leave, sdkReady };
 })();
 // game.js guards its integration points with `window.MP && ...`
 window.MP = MP;
