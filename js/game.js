@@ -558,19 +558,146 @@ function coinsForSegment(track, type, i) {
   }
   return coins;
 }
+// AI rivals are REAL physics cars (Hill Climb style): they drive the same
+// terrain with gravity, launches, roof bonks, water drag, and wheel slip.
+// Difficulty = their engine power + how well their "driver" brakes for
+// hazards, not artificial speed multipliers.
+const AI_DIFF = {
+  //      power: engine strength · caveSpeed: how slow they go in caves
+  //      brakeDist: how early they brake · engineLevel: water swimming power
+  easy:   { power: 0.75, caveSpeed: 200, brakeDist: 650, engineLevel: 1 },
+  medium: { power: 0.92, caveSpeed: 255, brakeDist: 400, engineLevel: 2 },
+  hard:   { power: 1.0,  caveSpeed: 380, brakeDist: 220, engineLevel: 3 },
+};
 function makeOpponents() {
-  // rivals keep pace with his engine upgrades so wins stay earned
   const engine = gearItem('engines', save.gear.engine);
   const D = currentDifficulty();
-  const mult = D.oppMult * (1 + (engine.speed - 1) * 0.8);  // rivals nearly match his engine upgrades
-  return OPP_BASE_SPEED.map((sp, i) => ({
-    name: OPP_NAMES[i],
-    speed: sp * mult * (0.95 + Math.random() * 0.12),
-    // rivals start ahead — races are chases (slowest gets the biggest lead)
-    x: 200 + D.headStart * (1 - i * 0.3),
-    slowUntil: 0,
-    design: { body: i === 2 ? 'sporty' : i === 1 ? 'sedan' : 'truck', colors: { body: OPP_COLORS[i], accent: '#ffffff', window: '#111' }, decal: 'stripe', spoiler: i === 2 },
-  }));
+  const A = AI_DIFF[save.difficulty] || AI_DIFF.easy;
+  // rivals partially keep pace with his engine upgrades
+  const upgradeMatch = 1 + (engine.speed - 1) * 0.4;
+  const tiers = [0.8, 0.9, 1.0];
+  return OPP_NAMES.map((name, i) => {
+    const startX = 200 + D.headStart * (1 - i * 0.3);
+    const pose = groundPose(startX);
+    const power = A.power * tiers[i] * upgradeMatch * (0.97 + Math.random() * 0.06);
+    return {
+      name,
+      // full car state
+      x: startX, y: pose.y, vx: 0, vy: 0,
+      angle: pose.slope, angVel: 0, grounded: true, vyGround: 0,
+      wheelSpin: 0, stunT: 0, bonkCd: 0, stuckT: 0,
+      // driver brain + engine
+      maxSpeed: MAX_SPEED * power,
+      accel: ACCEL * power,
+      caveSpeed: A.caveSpeed,
+      brakeDist: A.brakeDist,
+      engineLevel: A.engineLevel,
+      finishAt: null,
+      slowUntil: 0,   // missile stun (elapsed time)
+      design: { body: i === 2 ? 'sporty' : i === 1 ? 'sedan' : 'truck', colors: { body: OPP_COLORS[i], accent: '#ffffff', window: '#111' }, decal: 'stripe', spoiler: i === 2 },
+    };
+  });
+}
+
+// One physics step for an AI car — a compact mirror of the player physics.
+function stepAiCar(o, dt) {
+  if (o.finishAt !== null) { o.x += o.vx * dt; return; }  // cruise past the line
+  if (o.stunT > 0) o.stunT -= dt;
+  if (o.bonkCd > 0) o.bonkCd -= dt;
+  const stunned = o.stunT > 0 || race.elapsed < o.slowUntil;
+
+  // --- driver brain: pick a target speed ---
+  let target = o.maxSpeed;
+  const inOrNearCave = race.track.caves.some(z => o.x > z.start - o.brakeDist && o.x < z.end);
+  if (inOrNearCave) target = o.caveSpeed;
+  const nearWater = race.track.waters.some(z => o.x > z.start - o.brakeDist * 0.7 && o.x < z.end);
+  if (nearWater) target = Math.min(target, 330);
+  // rubber-band: push when dropped, coast when way ahead
+  const gap = race.car.x - o.x;
+  if (gap > 900) target *= 1.06;
+  else if (gap < -1400) target *= 0.9;
+  const gas = !stunned && o.vx < target;
+  const brake = stunned ? false : o.vx > target + 70;
+
+  const waterZone = terra.waterAt ? terra.waterAt(o.x) : null;
+  const submerged = waterZone && o.y > terra.surface(o.x) + 6;
+
+  if (o.grounded) {
+    const pose = groundPose(o.x, o.y);
+    const climbing = pose.slope < 0 && o.vx > -20;
+    const slipping = climbing && Math.abs(pose.slope) > 0.85;  // AI has grippy tyres
+    let accelMult = slipping ? 0.15 : 1;
+    let cap = o.maxSpeed;
+    if (submerged) {
+      accelMult *= 0.55 + 0.25 * (o.engineLevel - 1);
+      cap = 200 + 60 * (o.engineLevel - 1);
+      o.vx *= Math.max(0, 1 - 0.9 * dt);
+    }
+    if (gas) o.vx += o.accel * accelMult * (o.vx < 220 ? 1.8 : 1) * dt;
+    if (brake) o.vx -= BRAKE_DECEL * dt;
+    o.vx += GRAVITY * Math.sin(pose.slope) * dt * 0.5;
+    o.vx *= Math.max(0, 1 - 0.28 * dt);
+    o.vx = Math.min(cap, Math.max(-60, o.vx));
+
+    const prevY = o.y;
+    o.x += o.vx * dt;
+    const newPose = groundPose(o.x, o.y);
+    const requiredVy = (newPose.y - prevY) / dt;
+    const ballisticVy = (o.vyGround || 0) + GRAVITY * dt;
+    if (requiredVy > ballisticVy + 80 * dt && Math.abs(o.vx) > 120) {
+      o.grounded = false;
+      o.vy = ballisticVy;
+      o.vyGround = 0;
+    } else {
+      o.y = newPose.y;
+      o.vyGround = requiredVy;
+      o.angle += normAngle(newPose.slope - o.angle) * Math.min(1, dt * 12);
+    }
+  } else {
+    o.vy += GRAVITY * (submerged ? 0.4 : 1) * dt;
+    if (submerged) { o.vx *= Math.max(0, 1 - 1.1 * dt); o.vy *= Math.max(0, 1 - 1.4 * dt); }
+    o.x += o.vx * dt;
+    o.y += o.vy * dt;
+    const pose = groundPose(o.x, o.y);
+    if (o.y >= pose.y) {
+      o.y = pose.y;
+      o.grounded = true;
+      const diff = Math.abs(normAngle(o.angle - pose.slope));
+      if (diff > 2.0 || o.vy > 950) { o.angle = pose.slope; o.vx *= 0.4; }  // rough landing
+      else o.angle = pose.slope + normAngle(o.angle - pose.slope) * 0.3;
+      o.vy = 0;
+      o.vyGround = 0;
+    }
+  }
+
+  // cave roof bonk — rivals smack their heads too!
+  const ceilY = terra.ceiling(o.x);
+  if (isFinite(ceilY) && o.y - CAR_TOP < ceilY && o.bonkCd <= 0) {
+    o.y = ceilY + CAR_TOP;
+    o.bonkCd = 1.4;
+    o.stunT = 0.9;
+    o.vx *= 0.35;
+    if (!o.grounded && o.vy < 0) o.vy = 120;
+    race.booms.push({ x: o.x, y: o.y - 25, t: 0 });
+  }
+
+  // never let a rival stay stuck (deep water, weird terrain): quiet tow
+  if (Math.abs(o.vx) < 25 && o.grounded && !stunned) {
+    o.stuckT += dt;
+    if (o.stuckT > 3) {
+      o.stuckT = 0;
+      o.x += 300;
+      const p = groundPose(o.x);
+      o.y = p.y; o.angle = p.slope; o.vx = 120; o.vy = 0; o.grounded = true;
+    }
+  } else {
+    o.stuckT = 0;
+  }
+
+  o.wheelSpin += (o.vx / WHEEL_R) * dt;
+
+  // record the moment they cross the line
+  if (o.finishAt === null && o.x >= race.track.length) o.finishAt = race.elapsed;
 }
 
 // Set by the builder screen before launching a race on a custom track.
@@ -957,20 +1084,8 @@ function updateRace(dt) {
   // stream our position to the other player in a two-player race
   if (window.MP && MP.state.active) MP.publish(car);
 
-  // opponents advance (missile hits slow them down)
-  for (const o of race.opponents) {
-    const slowed = race.elapsed < o.slowUntil;
-    let sp = o.speed;
-    // rivals respect the same obstacles the player does
-    if (race.track.caves.some(z => o.x > z.start - 150 && o.x < z.end)) sp *= 0.62;
-    else if (race.track.waters.some(z => o.x > z.start && o.x < z.end)) sp *= 0.55;
-    else if (race.track.steeps.some(z => o.x > z.start && o.x < z.end)) sp *= 0.7;
-    // rubber-band: chase harder when dropped, ease up when far ahead
-    const gap = car.x - o.x;
-    if (gap > 800) sp *= 1.06;
-    else if (gap < -1200) sp *= 0.94;
-    o.x += sp * (slowed ? 0.45 : 1) * dt;
-  }
+  // AI rivals: full physics cars with driver brains
+  for (const o of race.opponents) stepAiCar(o, dt);
 
   // missiles (tank cars only)
   if (race.fireCooldown > 0) race.fireCooldown -= dt;
@@ -978,10 +1093,11 @@ function updateRace(dt) {
     m.x += m.vx * dt;
     if (m.y > terra.ground(m.x) - 8 || m.x > car.x + 1400) { m.dead = true; race.booms.push({ x: m.x, y: terra.ground(m.x) - 12, t: 0 }); continue; }
     for (const o of race.opponents) {
-      if (Math.abs(m.x - o.x) < 45 && Math.abs(m.y - (groundPose(o.x).y - 20)) < 70) {
+      if (Math.abs(m.x - o.x) < 45 && Math.abs(m.y - (o.y - 20)) < 70) {
         m.dead = true;
         o.slowUntil = race.elapsed + 3;
-        race.booms.push({ x: o.x, y: groundPose(o.x).y - 30, t: 0 });
+        o.vx *= 0.4;
+        race.booms.push({ x: o.x, y: o.y - 30, t: 0 });
         SFX.crash();
         break;
       }
@@ -1167,7 +1283,12 @@ function finishRace() {
   if (window.MP && MP.state.active) MP.reportFinish();
   const results = [{ name: 'You', time: race.elapsed, isPlayer: true }];
   // rivals' projected finish from where they actually are (missile slowdowns count)
-  race.opponents.forEach(o => results.push({ name: o.name, time: race.elapsed + (race.track.length - o.x) / o.speed, isPlayer: false }));
+  // rivals that finished have a real time; others get a fair projection
+  race.opponents.forEach(o => results.push({
+    name: o.name,
+    time: o.finishAt !== null ? o.finishAt : race.elapsed + (race.track.length - o.x) / (o.maxSpeed * 0.7),
+    isPlayer: false,
+  }));
   results.sort((a, b) => a.time - b.time);
   const place = results.findIndex(r => r.isPlayer) + 1;
   setTimeout(() => showFinishOverlay(place), 500);
@@ -1401,18 +1522,17 @@ function renderRace() {
     rctx.stroke();
   }
 
-  // opponents
+  // opponents (real physics state: they bounce, fly, and crash)
   for (const o of race.opponents) {
-    const ox = Math.min(o.x, race.track.length + 100);
+    const ox = o.x;
     if (ox < x0 - 100 || ox > x1 + 100) continue;
-    const pose = groundPose(ox);
-    drawCar(rctx, o.design, ox, pose.y, CAR_SCALE * 0.95, pose.slope, (ox / WHEEL_R));
-    if (race.elapsed < o.slowUntil) {
+    drawCar(rctx, o.design, ox, o.y, CAR_SCALE * 0.95, o.angle, o.wheelSpin);
+    if (race.elapsed < o.slowUntil || o.stunT > 0) {
       // smoke puffs over a missile-slowed rival
       rctx.fillStyle = 'rgba(90,90,90,0.6)';
       for (let i = 0; i < 3; i++) {
         rctx.beginPath();
-        rctx.arc(ox - 10 + i * 14, pose.y - 55 - Math.sin(performance.now() / 120 + i) * 6, 8 + i * 2, 0, Math.PI * 2);
+        rctx.arc(ox - 10 + i * 14, o.y - 55 - Math.sin(performance.now() / 120 + i) * 6, 8 + i * 2, 0, Math.PI * 2);
         rctx.fill();
       }
     }
