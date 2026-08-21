@@ -117,6 +117,26 @@ function gearItem(cat, id) {
   return GEAR_CATALOG[cat].find(i => i.id === id) || GEAR_CATALOG[cat][0];
 }
 
+// Each body handles differently (Hill Climb style): light cars are quick but
+// tippy and thirsty on hills; heavy ones are stable and steady. `topEnd` scales
+// speed, `grip` resists slipping, `stability` resists flipping over,
+// `airSpin` is how fast it rotates mid-air, `thirst` scales fuel burn.
+const BODY_HANDLING = {
+  sporty:   { topEnd: 1.04, grip: 1.0,  stability: 1.0,  airSpin: 1.0,  thirst: 1.0,  say: 'A speedy race car!' },
+  sedan:    { topEnd: 1.0,  grip: 1.0,  stability: 1.1,  airSpin: 0.9,  thirst: 0.95, say: 'A steady car!' },
+  muscle:   { topEnd: 1.06, grip: 0.95, stability: 0.95, airSpin: 1.05, thirst: 1.1,  say: 'A roaring muscle car!' },
+  truck:    { topEnd: 0.94, grip: 1.25, stability: 1.3,  airSpin: 0.75, thirst: 1.15, say: 'A big bouncy monster truck! It climbs anything!' },
+  buggy:    { topEnd: 1.0,  grip: 1.15, stability: 0.9,  airSpin: 1.25, thirst: 0.9,  say: 'A bouncy buggy! Great for flips!' },
+  f1:       { topEnd: 1.12, grip: 0.85, stability: 0.8,  airSpin: 1.15, thirst: 1.05, say: 'A formula one car! Super fast but tippy!' },
+  tank:     { topEnd: 0.9,  grip: 1.35, stability: 1.5,  airSpin: 0.6,  thirst: 1.1, say: 'A heavy tank! Slow but nothing tips it over!' },
+  porsche:  { topEnd: 1.08, grip: 1.0,  stability: 0.95, airSpin: 1.05, thirst: 1.0,  say: 'A fast sports car!' },
+  ferrari:  { topEnd: 1.1,  grip: 0.9,  stability: 0.85, airSpin: 1.1,  thirst: 1.05, say: 'A super car! Very fast!' },
+  defender: { topEnd: 0.92, grip: 1.3,  stability: 1.35, airSpin: 0.7,  thirst: 1.1,  say: 'A tough four by four! It grips the hills!' },
+};
+function bodyHandling(design) {
+  return BODY_HANDLING[design.body] || BODY_HANDLING.sedan;
+}
+
 // Geometry in "car units": axle line is y=0, car faces +x (right).
 // Wheels sit at x = -18 and +18. A car is ~56 units long.
 // head = where the driver's head shows through the window.

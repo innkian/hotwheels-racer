@@ -525,3 +525,32 @@ html, body {
   width: 100%; max-width: 920px;
   display: flex; gap: 12px; align-items: center; justify-content: center;
 }
+
+
+/* ---------- Fuel gauge ---------- */
+#fuel-gauge {
+  position: relative;
+  width: min(22vw, 130px); height: 26px;
+  background: rgba(255,255,255,0.75);
+  border-radius: 13px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid rgba(0,0,0,0.15);
+}
+#fuel-bar {
+  position: absolute; inset: 0 auto 0 0;
+  width: 100%;
+  background: linear-gradient(90deg, #2a9d4f, #7bd389);
+  transition: width 0.15s linear, background 0.3s;
+}
+#fuel-gauge.low #fuel-bar { background: linear-gradient(90deg, #f77f00, #ffd60a); }
+#fuel-gauge.empty #fuel-bar { background: #e63946; }
+#fuel-gauge.low { animation: fuelPulse 0.8s infinite; }
+#fuel-gauge.empty { animation: fuelPulse 0.4s infinite; }
+@keyframes fuelPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+#fuel-icon {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+}

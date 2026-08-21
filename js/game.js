@@ -270,6 +270,9 @@ const AIR_ROT_ACCEL = 5.5;          // rad/s^2 from pedals while airborne
 const STUN_DURATION = 1.0;
 const VIEW_W = 1000;                // world px visible across the canvas width
 
+const FUEL_MAX = 100;
+const FUEL_BURN = 4.0;      // per second at full throttle
+const FUEL_IDLE = 0.9;      // per second just rolling
 const CAVE_CLEARANCE = 115;         // roof height above the base floor inside caves
 
 const OPP_NAMES = ['Rusty', 'Bolt', 'Turbo Rex'];
@@ -278,10 +281,10 @@ const OPP_BASE_SPEED = [200, 260, 320];
 
 // ===================== Difficulty =====================
 const DIFFICULTIES = {
-  easy:   { label: 'Easy',   icon: '🐢', oppMult: 0.72, hearts: 5, caves: 1, headStart: 900, hazards: 0, hazardPool: [], rockRate: 1.6 },
-  medium: { label: 'Medium', icon: '🚗', oppMult: 1.12, hearts: 3, caves: 2, headStart: 500, hazards: 1, hazardPool: ['water', 'rocks'], rockRate: 1.4 },
-  hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.32, hearts: 3, caves: 3, headStart: 250, hazards: 2, hazardPool: ['water', 'rocks', 'steep'], rockRate: 1.0 },
-  expert: { label: 'Expert', icon: '🔥', oppMult: 1.45, hearts: 3, caves: 3, headStart: 150, hazards: 3, hazardPool: ['water', 'rocks', 'steep'], rockRate: 0.8 },
+  easy:   { label: 'Easy',   icon: '🐢', fuelBurn: 0.55, oppMult: 0.72, hearts: 5, caves: 1, headStart: 900, hazards: 0, hazardPool: [], rockRate: 1.6 },
+  medium: { label: 'Medium', icon: '🚗', fuelBurn: 0.85, oppMult: 1.12, hearts: 3, caves: 2, headStart: 500, hazards: 1, hazardPool: ['water', 'rocks'], rockRate: 1.4 },
+  hard:   { label: 'Hard',   icon: '🚀', fuelBurn: 1.0, oppMult: 1.32, hearts: 3, caves: 3, headStart: 250, hazards: 2, hazardPool: ['water', 'rocks', 'steep'], rockRate: 1.0 },
+  expert: { label: 'Expert', icon: '🔥', fuelBurn: 1.1, oppMult: 1.45, hearts: 3, caves: 3, headStart: 150, hazards: 3, hazardPool: ['water', 'rocks', 'steep'], rockRate: 0.8 },
 };
 function currentDifficulty() { return DIFFICULTIES[save.difficulty] || DIFFICULTIES.easy; }
 
@@ -527,6 +530,16 @@ let race = null;
 function makeCoins(track) {
   return track.segments.flatMap((type, i) => coinsForSegment(track, type, i));
 }
+
+// Fuel cans: spaced so you must keep moving, and never inside a cave.
+function fuelCansForSegment(track, type, i) {
+  if (type === 'cave' || i === 0) return [];
+  const x = START_PAD + i * SEG_LEN + SEG_LEN * 0.5;
+  return [{ x, y: track.ground(x) - 52, got: false }];
+}
+function makeFuelCans(track) {
+  return track.segments.flatMap((type, i) => fuelCansForSegment(track, type, i));
+}
 function coinsForSegment(track, type, i) {
   const coins = [];
   {
@@ -765,10 +778,10 @@ function initRace(keepTrack) {
     milestone: 0,               // last spoken distance milestone (drive mode)
     customTrack: currentCustom,
     maxHearts: hearts,
-    maxSpeed: MAX_SPEED * engine.speed * tyres.speed,
+    maxSpeed: MAX_SPEED * engine.speed * tyres.speed * bodyHandling(getDesign(save.selected)).topEnd,
     accel: ACCEL * engine.speed,
     slopeK: tyres.slope,
-    grip: tyres.grip,
+    grip: tyres.grip * bodyHandling(getDesign(save.selected)).grip,
     engineLevel: engine.id,
     rocks: [],
     rockTimer: 1,
@@ -779,6 +792,12 @@ function initRace(keepTrack) {
     dizzy: 0,
     caveSpeedSum: 0,
     caveSpeedTicks: 0,
+    fuel: FUEL_MAX,
+    outOfFuel: false,
+    spinAccum: 0,
+    flipsThisAir: 0,
+    totalFlips: 0,
+    handling: bodyHandling(getDesign(save.selected)),
     state: 'countdown', // countdown | running | paused | crashed | finished
     countdownVal: 3,
     countdownTimer: 0,
@@ -793,6 +812,7 @@ function initRace(keepTrack) {
     },
     camX: 0, camY: 0, camInit: false,
     coinsList: makeCoins(track),
+    fuelCans: makeFuelCans(track),
     opponents: mode === 'drive' ? [] : makeOpponents(),
     input: { gas: false, brake: false },
     flash: 0,
@@ -819,6 +839,7 @@ function initRace(keepTrack) {
   document.getElementById('distance-hud').classList.toggle('hidden', mode !== 'drive');
   updateHearts();
   updateCoins();
+  updateFuelHud();
   resizeRaceCanvas();
   startCountdown();
 }
@@ -839,6 +860,13 @@ function updateHearts() {
 }
 function updateCoins() {
   document.getElementById('coin-count').textContent = '🪙 ' + race.coins;
+}
+function updateFuelHud() {
+  const pct = Math.max(0, Math.min(100, (race.fuel / FUEL_MAX) * 100));
+  const g = document.getElementById('fuel-gauge');
+  document.getElementById('fuel-bar').style.width = pct + '%';
+  g.classList.toggle('low', pct < 25 && pct > 0);
+  g.classList.toggle('empty', pct <= 0);
 }
 
 function resizeRaceCanvas() {
@@ -1037,7 +1065,7 @@ function updateRace(dt) {
     if (race.magicBoost > 0) { accelMult = 3; speedCap = 720; }
     // pedals (extra torque at low speed so gentle climbs never trap the car —
     // but not under water, where engine power is the whole challenge)
-    if (canDrive && inp.gas) car.vx += race.accel * accelMult * (car.vx < 220 && !submerged ? 1.8 : 1) * dt;
+    if (canDrive && inp.gas && !race.outOfFuel) car.vx += race.accel * accelMult * (car.vx < 220 && !submerged ? 1.8 : 1) * dt;
     if (canDrive && inp.brake) car.vx -= BRAKE_DECEL * dt;
     // gravity along the slope (tyre grip reduces it) + rolling drag
     car.vx += GRAVITY * Math.sin(pose.slope) * dt * race.slopeK;
@@ -1066,8 +1094,9 @@ function updateRace(dt) {
   } else {
     // airborne
     if (canDrive) {
-      if (inp.gas) car.angVel -= AIR_ROT_ACCEL * dt;   // nose up
-      if (inp.brake) car.angVel += AIR_ROT_ACCEL * dt; // nose down
+      const spin = AIR_ROT_ACCEL * race.handling.airSpin;
+      if (inp.gas) car.angVel -= spin * dt;   // nose up
+      if (inp.brake) car.angVel += spin * dt; // nose down
     }
     car.angVel = Math.max(-4, Math.min(4, car.angVel));
     car.angle += car.angVel * dt;
@@ -1083,8 +1112,10 @@ function updateRace(dt) {
       car.y = pose.y;
       car.grounded = true;
       const diff = Math.abs(normAngle(car.angle - pose.slope));
-      if (diff > 2.0 && !submerged) {
-        car.angle = pose.slope;   // flip back onto wheels
+      // stable bodies (tank, 4x4) survive rougher landings than an F1
+      if (diff > 1.7 * race.handling.stability && !submerged) {
+        car.angle = pose.slope;   // crunched back onto its wheels
+        Speech.say('Ouch! Land on your wheels!');
         bonk(false);
       } else if (car.vy > 950 && !submerged) {
         car.angle = pose.slope;
@@ -1108,6 +1139,62 @@ function updateRace(dt) {
   }
 
   car.wheelSpin += (car.vx / WHEEL_R) * dt;
+
+  // ---- FUEL: the clock that makes every hill a decision ----
+  if (!race.outOfFuel) {
+    const burn = (inp.gas ? FUEL_BURN : FUEL_IDLE) * race.handling.thirst * (currentDifficulty().fuelBurn || 1);
+    race.fuel = Math.max(0, race.fuel - burn * dt);
+    if (race.fuel <= 0) {
+      race.outOfFuel = true;
+      Speech.say('Out of fuel! Roll to the finish!');
+      SFX.lose();
+    } else if (race.fuel < 25 && !race.fuelWarned) {
+      race.fuelWarned = true;
+      Speech.say('Low fuel! Find a fuel can!');
+    }
+  } else if (Math.abs(car.vx) < 30 && car.grounded) {
+    // stranded with an empty tank: a friendly fuel truck turns up so a
+    // young player is never stuck forever (it costs time, not the race)
+    race.strandedT = (race.strandedT || 0) + dt;
+    if (race.strandedT > 4) {
+      race.strandedT = 0;
+      race.fuel = 35;
+      race.outOfFuel = false;
+      race.fuelWarned = false;
+      SFX.coin();
+      Speech.say('The fuel truck found you! Off you go!');
+    }
+  } else {
+    race.strandedT = 0;
+  }
+  for (const f of race.fuelCans) {
+    if (!f.got && Math.abs(f.x - car.x) < 75 && Math.abs(f.y - car.y) < 130) {
+      f.got = true;
+      race.fuel = Math.min(FUEL_MAX, race.fuel + 60);
+      race.outOfFuel = false;
+      race.fuelWarned = race.fuel < 25;
+      SFX.coin();
+      Speech.say('Fuel!');
+    }
+  }
+  updateFuelHud();
+
+  // ---- FLIPS: reward air control, punish landing on your roof ----
+  if (!car.grounded) {
+    race.spinAccum += Math.abs(car.angVel) * dt;
+    const whole = Math.floor(race.spinAccum / (Math.PI * 2));
+    if (whole > race.flipsThisAir) {
+      race.flipsThisAir = whole;
+      race.totalFlips += 1;
+      race.coins += 5;
+      updateCoins();
+      SFX.win();
+      Speech.say(car.angVel < 0 ? 'Backflip! Five coins!' : 'Front flip! Five coins!');
+    }
+  } else {
+    race.spinAccum = 0;
+    race.flipsThisAir = 0;
+  }
 
   // watch how fast the player dares to take caves — rivals will copy it
   if (terra.inCave(car.x) && car.vx > 0) { race.caveSpeedSum += car.vx; race.caveSpeedTicks++; }
@@ -1292,6 +1379,8 @@ function updateRace(dt) {
     if (car.x > race.track.length - 2600) {
       const seg = race.track.extend();
       race.coinsList.push(...coinsForSegment(race.track, seg.type, seg.i));
+      race.fuelCans.push(...fuelCansForSegment(race.track, seg.type, seg.i));
+      race.fuelCans = race.fuelCans.filter(f => !f.got && f.x > car.x - 1500);
       race.coinsList = race.coinsList.filter(c => !c.got && c.x > car.x - 1500);
     }
     const meters = Math.max(0, Math.floor((car.x - 200) / 10));
@@ -1539,6 +1628,25 @@ function renderRace() {
         rctx.fillRect(FIN + 3 + c * 14, gy - 170 + r * 14, 14, 14);
       }
     }
+  }
+
+  // fuel cans
+  for (const f of race.fuelCans) {
+    if (f.got || f.x < x0 || f.x > x1) continue;
+    const bob = Math.sin(performance.now() / 320 + f.x) * 4;
+    rctx.fillStyle = '#e63946';
+    rctx.beginPath();
+    rctx.roundRect(f.x - 13, f.y - 18 + bob, 26, 30, 4);
+    rctx.fill();
+    rctx.strokeStyle = '#8d1c26';
+    rctx.lineWidth = 2;
+    rctx.stroke();
+    rctx.fillStyle = '#ffd60a';
+    rctx.font = 'bold 15px sans-serif';
+    rctx.textAlign = 'center';
+    rctx.fillText('F', f.x, f.y + 3 + bob);
+    rctx.fillStyle = '#8d1c26';
+    rctx.fillRect(f.x + 9, f.y - 24 + bob, 7, 7);
   }
 
   // coins

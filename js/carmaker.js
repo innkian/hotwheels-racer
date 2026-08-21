@@ -90,7 +90,7 @@
       card.addEventListener('pointerdown', () => {
         draft.body = body;
         SFX.click();
-        Speech.say(say);
+        Speech.say(say + ' ' + bodyHandling({ body }).say);
         markSelected(row, el => el.dataset.body === draft.body);
         renderPreview();
       });
