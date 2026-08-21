@@ -162,6 +162,18 @@ function showGrownups() {
       ${group('Vehicles', s.groups.type)}
       ${group('Patterns', s.groups.decal)}
     </div>
+    ${(() => {
+      const rows = Rivals.summary();
+      if (!rows.length) return '';
+      return `<div style="width:100%;text-align:left;">
+        <h3 style="margin:4px 0;color:#1d3557;font-size:16px;">🤖 Rival racers (they learn)</h3>
+        ${rows.map(r => `<div style="font-size:14px;color:#333;">
+          ${DIFFICULTIES[r.diff] ? DIFFICULTIES[r.diff].icon + ' ' + DIFFICULTIES[r.diff].label : r.diff}:
+          <b>Level ${r.level}/10</b> · ${r.wins}W–${r.losses}L${r.caveSpeed ? ` · learned cave pace ${r.caveSpeed}` : ''}
+        </div>`).join('')}
+        <p style="font-size:12px;color:#666;margin:4px 0 0;">Rivals speed up when the kids keep winning and ease off after losses.</p>
+      </div>`;
+    })()}
     <p style="font-size:13px;color:#555;margin:0;">Tip: when he wins a car, ask him to tell you its color and name out loud — retelling builds the skills the teacher flagged.</p>
     <button id="btn-grownups-close" class="big-btn gray">Close</button>
   `;
@@ -269,6 +281,7 @@ const DIFFICULTIES = {
   easy:   { label: 'Easy',   icon: '🐢', oppMult: 0.72, hearts: 5, caves: 1, headStart: 900, hazards: 0, hazardPool: [], rockRate: 1.6 },
   medium: { label: 'Medium', icon: '🚗', oppMult: 1.12, hearts: 3, caves: 2, headStart: 500, hazards: 1, hazardPool: ['water', 'rocks'], rockRate: 1.4 },
   hard:   { label: 'Hard',   icon: '🚀', oppMult: 1.32, hearts: 3, caves: 3, headStart: 250, hazards: 2, hazardPool: ['water', 'rocks', 'steep'], rockRate: 1.0 },
+  expert: { label: 'Expert', icon: '🔥', oppMult: 1.45, hearts: 3, caves: 3, headStart: 150, hazards: 3, hazardPool: ['water', 'rocks', 'steep'], rockRate: 0.8 },
 };
 function currentDifficulty() { return DIFFICULTIES[save.difficulty] || DIFFICULTIES.easy; }
 
@@ -565,21 +578,33 @@ function coinsForSegment(track, type, i) {
 const AI_DIFF = {
   //      power: engine strength · caveSpeed: how slow they go in caves
   //      brakeDist: how early they brake · engineLevel: water swimming power
-  easy:   { power: 0.75, caveSpeed: 200, brakeDist: 650, engineLevel: 1 },
-  medium: { power: 0.92, caveSpeed: 255, brakeDist: 400, engineLevel: 2 },
-  hard:   { power: 1.0,  caveSpeed: 380, brakeDist: 220, engineLevel: 3 },
+  //      match: how much of the player's own upgrades the rivals get
+  // `match` stays low on purpose: upgrades must feel powerful, so the
+  // challenge comes from picking a harder tier, not from rivals copying
+  // whatever the kids just bought.
+  easy:   { power: 0.75, caveSpeed: 200, brakeDist: 650, engineLevel: 1, match: 0.2 },
+  medium: { power: 0.86, caveSpeed: 265, brakeDist: 430, engineLevel: 2, match: 0.3 },
+  hard:   { power: 1.13, caveSpeed: 355, brakeDist: 240, engineLevel: 3, match: 0.4 },
+  expert: { power: 1.34, caveSpeed: 430, brakeDist: 150, engineLevel: 3, match: 0.5 },
 };
 function makeOpponents() {
   const engine = gearItem('engines', save.gear.engine);
   const D = currentDifficulty();
   const A = AI_DIFF[save.difficulty] || AI_DIFF.easy;
-  // rivals partially keep pace with his engine upgrades
-  const upgradeMatch = 1 + (engine.speed - 1) * 0.4;
-  const tiers = [0.8, 0.9, 1.0];
+  // rivals keep pace with BOTH his engine and tyre upgrades, so buying gear
+  // raises the whole race instead of trivializing it
+  const tyres = gearItem('tyres', save.gear.tyres);
+  const playerGear = engine.speed * tyres.speed;
+  const upgradeMatch = 1 + (playerGear - 1) * A.match;
+  // what the rivals have LEARNED from past races on this difficulty
+  const learned = Rivals.profile(save.difficulty);
+  // all three rivals are real contenders now (was 0.8/0.9/1.0 — two pushovers)
+  const tiers = [0.94, 0.97, 1.0];
   return OPP_NAMES.map((name, i) => {
     const startX = 200 + D.headStart * (1 - i * 0.3);
     const pose = groundPose(startX);
-    const power = A.power * tiers[i] * upgradeMatch * (0.97 + Math.random() * 0.06);
+    // learned skill makes them faster the more the kids win on this tier
+    const power = A.power * tiers[i] * upgradeMatch * learned.skill * (0.97 + Math.random() * 0.06);
     return {
       name,
       // full car state
@@ -589,8 +614,9 @@ function makeOpponents() {
       // driver brain + engine
       maxSpeed: MAX_SPEED * power,
       accel: ACCEL * power,
-      caveSpeed: A.caveSpeed,
-      brakeDist: A.brakeDist,
+      // they copy the cave pace the kids get away with (never below their own)
+      caveSpeed: Math.max(A.caveSpeed, learned.caveSpeed || 0),
+      brakeDist: A.brakeDist / Math.max(1, learned.skill),   // braver as they learn
       engineLevel: A.engineLevel,
       finishAt: null,
       slowUntil: 0,   // missile stun (elapsed time)
@@ -751,6 +777,8 @@ function initRace(keepTrack) {
     steepFailCooldown: 0,
     magicBoost: 0,
     dizzy: 0,
+    caveSpeedSum: 0,
+    caveSpeedTicks: 0,
     state: 'countdown', // countdown | running | paused | crashed | finished
     countdownVal: 3,
     countdownTimer: 0,
@@ -1081,6 +1109,9 @@ function updateRace(dt) {
 
   car.wheelSpin += (car.vx / WHEEL_R) * dt;
 
+  // watch how fast the player dares to take caves — rivals will copy it
+  if (terra.inCave(car.x) && car.vx > 0) { race.caveSpeedSum += car.vx; race.caveSpeedTicks++; }
+
   // stream our position to the other player in a two-player race
   if (window.MP && MP.state.active) MP.publish(car);
 
@@ -1126,9 +1157,10 @@ function updateRace(dt) {
       car.bonkCooldown = 0;
       race.shieldCharge = 0;  // rescue costs the heart even with a shield
       bonk(false);
-      Speech.say('The water is too deep for this engine! The tow truck carried you across. A bigger engine can drive under water!');
+      // towed BACK to the near bank — drowning must never be a shortcut
+      Speech.say('Too deep! The tow truck pulled you out. Go fast and jump on the logs, or get a bigger engine!');
       if (race.state === 'running') {
-        car.x = waterZone.end + 80;   // towed to the far bank
+        car.x = Math.max(200, waterZone.start - 420);
         const p = groundPose(car.x, undefined);
         car.y = p.y; car.angle = p.slope; car.vx = 0; car.vy = 0; car.grounded = true;
       }
@@ -1693,6 +1725,9 @@ function showFinishOverlay(place) {
   if (place === 1) {
     save.wins += 1;
     save.winProgress = (save.winProgress || 0) + 1;
+    // winning streak on this tier: after 3 in a row, nudge them upward
+    if (save.streakDiff !== save.difficulty) { save.streakDiff = save.difficulty; save.streak = 0; }
+    save.streak = (save.streak || 0) + 1;
     const needed = winsNeededForNextCar();
     const allDone = save.unlocked.length >= CAR_DESIGNS.length;
     if (!allDone && save.winProgress >= needed) {
@@ -1731,11 +1766,39 @@ function showFinishOverlay(place) {
       <h2>🏁 You finished ${place}${suffix} place!</h2>
       <p style="font-size:18px;color:#1d3557;">Win 1st place to unlock a new car. Try again!</p>
     `;
+    save.streak = 0;
     SFX.lose();
     Speech.say('Good try! Race again and win a new car!');
   }
   bodyHtml += `<p style="font-size:18px;color:#b07d00;font-weight:700;">🪙 +${race.coins} coins · You have ${save.coins} — spend them in the Workshop!</p>`;
+
+  // Too good for this tier? Offer the step up right here.
+  const NEXT_DIFF = { easy: 'medium', medium: 'hard', hard: 'expert' };
+  const stepUp = (save.streak || 0) >= 3 && NEXT_DIFF[save.difficulty] ? NEXT_DIFF[save.difficulty] : null;
+  if (stepUp) {
+    const D = DIFFICULTIES[stepUp];
+    bodyHtml += `<p style="font-size:19px;color:#7b2cbf;font-weight:800;">
+      🔥 ${save.streak} wins in a row! Ready for ${D.icon} ${D.label.toUpperCase()}?</p>`;
+    Speech.say(`Wow! ${save.streak} wins in a row! You are too fast for this level. Try ${D.label} mode!`, { interrupt: false });
+  }
   const isMP = window.MP && MP.state.active;
+
+  // --- rivals learn from this race (single-player only) ---
+  let learn = null;
+  if (!isMP) {
+    const bestRival = Math.min(...race.opponents.map(o => o.finishAt !== null ? o.finishAt : Infinity));
+    const margin = isFinite(bestRival) ? bestRival - race.elapsed : 12;
+    const avgCave = race.caveSpeedTicks > 30 ? race.caveSpeedSum / race.caveSpeedTicks : null;
+    learn = Rivals.recordRace(save.difficulty, place === 1, margin, avgCave);
+    if (learn.leveledUp) {
+      bodyHtml += `<p style="font-size:18px;color:#e63946;font-weight:800;">
+        🤖 The racers have been practicing! Rival Level ${learn.level}</p>`;
+      Speech.say('Careful! The other racers have been practicing. They are getting faster!', { interrupt: false });
+    } else if (learn.leveledDown) {
+      bodyHtml += `<p style="font-size:17px;color:#2a9d4f;font-weight:700;">
+        🤖 The racers eased off a little. Rival Level ${learn.level}</p>`;
+    }
+  }
   if (isMP) {
     const won = MP.iWon();
     bodyHtml = `<p style="font-size:22px;font-weight:800;color:${won ? '#2a9d4f' : '#e63946'};">
@@ -1744,6 +1807,7 @@ function showFinishOverlay(place) {
   }
   panel.innerHTML = bodyHtml + `
     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+      ${stepUp && !isMP ? `<button id="btn-step-up" class="big-btn purple">${DIFFICULTIES[stepUp].icon} Try ${DIFFICULTIES[stepUp].label}!</button>` : ''}
       ${isMP
         ? '<button id="btn-result-multi" class="big-btn">👥 Race Again</button>'
         : `<button id="btn-race-again" class="big-btn">🔄 Race Again</button>
@@ -1762,6 +1826,17 @@ function showFinishOverlay(place) {
   }
   const againBtn = document.getElementById('btn-race-again');
   if (againBtn) againBtn.addEventListener('click', () => { SFX.click(); initRace(true); });
+  const stepBtn = document.getElementById('btn-step-up');
+  if (stepBtn) stepBtn.addEventListener('click', () => {
+    SFX.click();
+    save.difficulty = stepUp;
+    save.streak = 0;
+    save.streakDiff = stepUp;
+    persist();
+    renderDifficulty();
+    Speech.say(`${DIFFICULTIES[stepUp].label} mode! These racers are much faster. Good luck!`);
+    initRace();
+  });
   const buildBtn = document.getElementById('btn-result-build');
   if (buildBtn) buildBtn.addEventListener('click', () => { SFX.click(); showScreen('build'); });
   const newTrackBtn = document.getElementById('btn-result-newtrack');
