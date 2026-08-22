@@ -37,19 +37,19 @@
       if (kind === 'add') {
         const a = 1 + rnd(5), b = 1 + rnd(5);
         const ans = a + b;
-        return { q: `${a} plus ${b}`, say: `What is ${a} plus ${b}?`,
+        return { topic: 'add', q: `${a} plus ${b}`, say: `What is ${a} plus ${b}?`,
                  choices: uniqueChoices(ans, () => Math.max(1, ans + rnd(5) - 2)), answer: String(ans) };
       }
       if (kind === 'count') {
         const n = 2 + rnd(6);
-        return { q: `How many? ${'🚗'.repeat(n)}`, say: 'How many cars?',
+        return { topic: 'count', q: `How many? ${'🚗'.repeat(n)}`, say: 'How many cars?',
                  choices: uniqueChoices(n, () => Math.max(1, n + rnd(5) - 2)), answer: String(n) };
       }
       const a = 1 + rnd(9);
       let b = 1 + rnd(9);
       while (b === a) b = 1 + rnd(9);
       const ans = Math.max(a, b);
-      return { q: `Which is bigger?  ${a}  or  ${b}`, say: `Which is bigger, ${a} or ${b}?`,
+      return { topic: 'compare', q: `Which is bigger?  ${a}  or  ${b}`, say: `Which is bigger, ${a} or ${b}?`,
                choices: shuffle([String(a), String(b)]), answer: String(ans) };
     }
     if (age === 6) {
@@ -57,24 +57,24 @@
       if (kind === 'add') {
         const a = 2 + rnd(15), b = 2 + rnd(10);
         const ans = a + b;
-        return { q: `${a} + ${b}`, say: `What is ${a} plus ${b}?`,
+        return { topic: 'add', q: `${a} + ${b}`, say: `What is ${a} plus ${b}?`,
                  choices: uniqueChoices(ans, () => Math.max(1, ans + rnd(9) - 4)), answer: String(ans) };
       }
       if (kind === 'sub') {
         const a = 6 + rnd(14), b = 1 + rnd(6);
         const ans = a - b;
-        return { q: `${a} − ${b}`, say: `What is ${a} take away ${b}?`,
+        return { topic: 'subtract', q: `${a} − ${b}`, say: `What is ${a} take away ${b}?`,
                  choices: uniqueChoices(ans, () => Math.max(0, ans + rnd(7) - 3)), answer: String(ans) };
       }
       if (kind === 'double') {
         const a = 2 + rnd(10);
         const ans = a * 2;
-        return { q: `Double ${a}`, say: `What is double ${a}?`,
+        return { topic: 'double', q: `Double ${a}`, say: `What is double ${a}?`,
                  choices: uniqueChoices(ans, () => Math.max(1, ans + rnd(7) - 3)), answer: String(ans) };
       }
       const a = 1 + rnd(9);
       const ans = 10 - a;
-      return { q: `${a} + ? = 10`, say: `${a} plus what makes ten?`,
+      return { topic: 'bonds', q: `${a} + ? = 10`, say: `${a} plus what makes ten?`,
                choices: uniqueChoices(ans, () => Math.max(0, ans + rnd(5) - 2)), answer: String(ans) };
     }
     // age 8+
@@ -82,22 +82,22 @@
     if (kind === 'times') {
       const a = 2 + rnd(11), b = 2 + rnd(11);
       const ans = a * b;
-      return { q: `${a} × ${b}`, say: `What is ${a} times ${b}?`,
+      return { topic: 'times', q: `${a} × ${b}`, say: `What is ${a} times ${b}?`,
                choices: uniqueChoices(ans, () => ans + (rnd(2) ? a : b) * (rnd(2) ? 1 : -1)), answer: String(ans) };
     }
     if (kind === 'divide') {
       const b = 2 + rnd(9), ans = 2 + rnd(11);
-      return { q: `${b * ans} ÷ ${b}`, say: `What is ${b * ans} divided by ${b}?`,
+      return { topic: 'divide', q: `${b * ans} ÷ ${b}`, say: `What is ${b * ans} divided by ${b}?`,
                choices: uniqueChoices(ans, () => Math.max(1, ans + rnd(5) - 2)), answer: String(ans) };
     }
     if (kind === 'add3') {
       const a = 10 + rnd(80), b = 10 + rnd(80);
       const ans = a + b;
-      return { q: `${a} + ${b}`, say: `What is ${a} plus ${b}?`,
+      return { topic: 'add', q: `${a} + ${b}`, say: `What is ${a} plus ${b}?`,
                choices: uniqueChoices(ans, () => ans + (rnd(4) + 1) * 10 * (rnd(2) ? 1 : -1)), answer: String(ans) };
     }
     const ans = 2 + rnd(25);
-    return { q: `Half of ${ans * 2}`, say: `What is half of ${ans * 2}?`,
+    return { topic: 'half', q: `Half of ${ans * 2}`, say: `What is half of ${ans * 2}?`,
              choices: uniqueChoices(ans, () => Math.max(1, ans + rnd(7) - 3)), answer: String(ans) };
   }
 
@@ -239,17 +239,36 @@
     ],
   };
 
-  function bankQ(bank, age) {
+  function bankQ(bank, age, topicName) {
     const list = bank[age] || bank[6];
     const [q, ans, wrong] = pick(list);
-    return { q, say: q, choices: shuffle([ans, ...wrong.slice(0, 3)]), answer: ans };
+    return { topic: topicName, q, say: q, choices: shuffle([ans, ...wrong.slice(0, 3)]), answer: ans };
+  }
+
+  function generateOne(subj) {
+    if (subj === 'math') return mathQ(state.age);
+    if (subj === 'science') return bankQ(SCIENCE, state.age, 'science');
+    if (subj === 'english') return bankQ(ENGLISH, state.age, 'english');
+    return ShapeQuiz.next(state.age);
+  }
+
+  // Normalise every question so choices are always [{key, text?, fig?}]
+  function normalise(q) {
+    if (q.choices.length && typeof q.choices[0] === 'string') {
+      q.choices = q.choices.map(t => ({ key: t, text: t }));
+    }
+    return q;
   }
 
   function nextQuestion() {
-    const subj = state.subject === 'mixed' ? pick(['math', 'science', 'english']) : state.subject;
-    if (subj === 'math') return mathQ(state.age);
-    if (subj === 'science') return bankQ(SCIENCE, state.age);
-    return bankQ(ENGLISH, state.age);
+    const subj = state.subject === 'mixed'
+      ? pick(['math', 'science', 'english', 'shapes'])
+      : state.subject;
+    // offer the memory a few candidates; it favours weaker topics and
+    // skips anything asked recently
+    const candidates = [];
+    for (let i = 0; i < 10; i++) candidates.push(normalise(generateOne(subj)));
+    return QuizMemory.choose(subj, state.age, candidates);
   }
 
   // ---------- rendering ----------
@@ -340,26 +359,58 @@
   }
 
   // ---------- question flow ----------
+  function paintCanvas(cv, drawFn) {
+    requestAnimationFrame(() => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = cv.clientWidth || 120, h = cv.clientHeight || 90;
+      cv.width = w * dpr; cv.height = h * dpr;
+      const c = cv.getContext('2d');
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawFn(c, w, h);
+    });
+  }
+
   function askQuestion() {
     state.current = nextQuestion();
-    const qEl = document.getElementById('quiz-question');
-    qEl.textContent = state.current.q;
-    Speech.say(state.current.say);
+    const cur = state.current;
+    document.getElementById('quiz-question').textContent = cur.q;
+    Speech.say(cur.say);
+
+    // picture prompt (shape puzzles)
+    const promptBox = document.getElementById('quiz-prompt-figs');
+    promptBox.innerHTML = '';
+    if (cur.promptFigs) {
+      promptBox.classList.remove('hidden');
+      const cv = document.createElement('canvas');
+      promptBox.appendChild(cv);
+      paintCanvas(cv, (c, w, h) => drawFigureRow(c, cur.promptFigs, w, h, cur.promptQMark));
+    } else {
+      promptBox.classList.add('hidden');
+    }
+
     const box = document.getElementById('quiz-answers');
     box.innerHTML = '';
-    state.current.choices.forEach(choice => {
+    box.classList.toggle('figs', cur.choices.some(ch => ch.fig));
+    cur.choices.forEach(choice => {
       const b = document.createElement('button');
       b.className = 'quiz-answer';
-      b.textContent = choice;
-      b.addEventListener('pointerdown', () => answer(choice, b));
+      if (choice.fig) {
+        const cv = document.createElement('canvas');
+        b.appendChild(cv);
+        paintCanvas(cv, (c, w, h) => drawFigure(c, choice.fig, w / 2, h / 2, Math.min(w, h) * 0.8));
+      } else {
+        b.textContent = choice.text;
+      }
+      b.addEventListener('pointerdown', () => answer(choice.key, b));
       box.appendChild(b);
     });
   }
 
-  function answer(choice, btn) {
+  function answer(choiceKey, btn) {
     if (!state || state.locked || state.done) return;
     state.locked = true;
-    const right = choice === state.current.answer;
+    const right = choiceKey === state.current.answer;
+    QuizMemory.record(state.subject, state.age, state.current, right);
     if (right) {
       state.correct++;
       state.streak++;
@@ -374,11 +425,12 @@
       state.streak = 0;
       state.speed *= 0.6;
       btn.classList.add('wrong');
-      const rightBtn = [...document.querySelectorAll('.quiz-answer')]
-        .find(b => b.textContent === state.current.answer);
+      const idx = state.current.choices.findIndex(c => c.key === state.current.answer);
+      const rightBtn = document.querySelectorAll('.quiz-answer')[idx];
       if (rightBtn) rightBtn.classList.add('right');
       SFX.crash();
-      Speech.say(`The answer is ${state.current.answer}.`);
+      const spoken = state.current.choices[idx];
+      Speech.say(spoken && spoken.text ? `The answer is ${spoken.text}.` : 'This one is the answer.');
     }
     document.getElementById('quiz-streak').textContent = '🔥 ' + state.streak;
     setTimeout(() => {
@@ -401,7 +453,11 @@
         ✅ ${state.correct} correct · 🔥 best streak ${state.bestStreak}
       </p>
       <p style="font-size:18px;color:#b07d00;font-weight:700;">🪙 +${state.coins} coins for your garage!</p>
+      ${QuizMemory.readyToLevelUp(state.subject, state.age) && state.age < 8
+        ? `<p style="font-size:18px;color:#7b2cbf;font-weight:800;">🌟 You're acing these! Try the older questions?</p>` : ''}
       <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+        ${QuizMemory.readyToLevelUp(state.subject, state.age) && state.age < 8
+          ? `<button id="btn-quiz-levelup" class="big-btn purple">⬆ Harder questions</button>` : ''}
         <button id="btn-quiz-again" class="big-btn">🔄 Race Again</button>
         <button id="btn-quiz-menu" class="big-btn gray">⬅ Back</button>
       </div>`;
@@ -410,6 +466,15 @@
     Speech.say(won
       ? `You won! You got ${state.correct} right!`
       : `Good try! You got ${state.correct} right. Race again!`);
+    const lvlBtn = document.getElementById('btn-quiz-levelup');
+    if (lvlBtn) lvlBtn.addEventListener('click', () => {
+      SFX.click();
+      const nextAge = state.age === 4 ? 6 : 8;
+      save.quizAge = nextAge;
+      persist();
+      Speech.say('Harder questions! Good luck!');
+      startRace(state.subject, nextAge);
+    });
     document.getElementById('btn-quiz-again').addEventListener('click', () => {
       SFX.click();
       startRace(state.subject, state.age);

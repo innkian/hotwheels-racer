@@ -643,3 +643,15 @@ html, body {
 .quiz-answer:active { transform: translateY(3px); box-shadow: none; }
 .quiz-answer.right { background: #d8f3dc; border-color: #2a9d4f; }
 .quiz-answer.wrong { background: #ffe3e5; border-color: #e63946; }
+
+/* ---------- Quiz Racer: picture puzzles ---------- */
+#quiz-prompt-figs {
+  width: 100%; max-width: 920px;
+  background: rgba(255,255,255,0.9);
+  border-radius: 16px; padding: 8px;
+}
+#quiz-prompt-figs.hidden { display: none; }
+#quiz-prompt-figs canvas { width: 100%; height: min(16vh, 120px); display: block; }
+#quiz-answers.figs { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+#quiz-answers.figs .quiz-answer { padding: 8px; }
+.quiz-answer canvas { width: 100%; height: min(12vh, 92px); display: block; }

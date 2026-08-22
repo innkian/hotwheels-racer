@@ -180,6 +180,18 @@ function showGrownups() {
         <p style="font-size:12px;color:#666;margin:4px 0 0;">Rivals speed up when the kids keep winning and ease off after losses.</p>
       </div>`;
     })()}
+    ${(() => {
+      const rows = QuizMemory.report();
+      if (!rows.length) return '';
+      return `<div style="width:100%;text-align:left;">
+        <h3 style="margin:6px 0 2px;color:#1d3557;font-size:16px;">🏎️ Quiz Racer progress</h3>
+        ${rows.map(r => `<div style="font-size:14px;color:#333;margin:2px 0;">
+          <b>${r.key}</b>: ${r.asked} questions · ${r.accuracy}% correct
+          ${r.weak.length ? `<br><span style="color:#e63946;">needs practice: ${r.weak.join(', ')}</span>` : ''}
+          ${r.strong.length ? `<br><span style="color:#2a9d4f;">strong: ${r.strong.join(', ')}</span>` : ''}
+        </div>`).join('')}
+      </div>`;
+    })()}
     <p style="font-size:13px;color:#555;margin:0;">Tip: when he wins a car, ask him to tell you its color and name out loud — retelling builds the skills the teacher flagged.</p>
     <button id="btn-grownups-close" class="big-btn gray">Close</button>
   `;
