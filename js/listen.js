@@ -141,7 +141,7 @@
   document.getElementById('btn-listen-back').addEventListener('click', () => {
     SFX.click();
     Speech.stop();
-    showScreen('title');
+    showScreen('learnmenu');
   });
 
   // game.js calls this when the screen opens

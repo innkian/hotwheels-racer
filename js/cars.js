@@ -105,6 +105,15 @@ const GEAR_CATALOG = {
     { id: 'cow',      name: 'COW',      icon: '🐮', price: 15, say: 'A cow horn! It moos! Moo!' },
     { id: 'elephant', name: 'ELEPHANT', icon: '🐘', price: 20, say: 'An elephant horn! It trumpets! Toot!' },
   ],
+  suspension: [
+    { id: 'basic',   name: 'BASIC',   icon: '🔩', price: 0,  land: 1,    say: 'Basic springs. They are okay.' },
+    { id: 'sport',   name: 'SPORT',   icon: '🌀', price: 35, land: 1.25, say: 'Sport springs! They soak up bumpy landings so you crash less!' },
+    { id: 'offroad', name: 'OFFROAD', icon: '🏔️', price: 65, land: 1.5,  say: 'Off road springs! Super bouncy! You can land from really high jumps!' },
+  ],
+  drive: [
+    { id: '2wd', name: '2 WHEEL', icon: '🛞', price: 0,  climb: 1,    say: 'Two wheel drive. Normal grip.' },
+    { id: '4wd', name: '4 WHEEL', icon: '⚙️', price: 55, climb: 1.35, say: 'Four wheel drive! All four wheels pull, so you climb steep hills without slipping!' },
+  ],
   trails: [
     { id: 'none',    name: 'NONE',    icon: '⭕', price: 0,  say: 'No trail today.' },
     { id: 'rainbow', name: 'RAINBOW', icon: '🌈', price: 25, say: 'A rainbow trail! It leaves so many colors behind you!' },
@@ -135,6 +144,42 @@ const BODY_HANDLING = {
 };
 function bodyHandling(design) {
   return BODY_HANDLING[design.body] || BODY_HANDLING.sedan;
+}
+
+// Stages change the physics AND the scenery, so each world feels different.
+// gravity: <1 = floaty moon jumps · grip: <1 = slippery ice · ice: bridges crack
+const STAGE_CATALOG = [
+  {
+    id: 'earth', name: 'COUNTRYSIDE', icon: '🌳', price: 0,
+    gravity: 1, grip: 1, ice: false,
+    sky: ['#7ec8ff', '#d9f0ff'], ground: '#8b5e34', grass: '#57a639',
+    sun: '#ffd60a', cloud: 'rgba(255,255,255,0.85)', rock: '#5a4632', rockDark: '#4a3826',
+    say: 'The green countryside! Sunny hills and caves.',
+  },
+  {
+    id: 'moon', name: 'MOON', icon: '🌙', price: 45,
+    gravity: 0.38, grip: 0.9, ice: false, landBonus: 1.45,
+    sky: ['#0b1026', '#2a2a4a'], ground: '#7a7a85', grass: '#a9a9b5',
+    sun: '#eaeaea', cloud: 'rgba(255,255,255,0.10)', rock: '#5b5b66', rockDark: '#46464f', stars: true,
+    say: 'The moon! Gravity is tiny here, so every jump flies super high!',
+  },
+  {
+    id: 'arctic', name: 'ARCTIC', icon: '❄️', price: 55,
+    gravity: 1, grip: 0.55, ice: true, landBonus: 1.1,
+    sky: ['#bcdcf5', '#eef7ff'], ground: '#cfe3f0', grass: '#ffffff',
+    sun: '#fff6c8', cloud: 'rgba(255,255,255,0.95)', rock: '#8fa8bb', rockDark: '#7590a6', snow: true,
+    say: 'The frozen arctic! The ice is slippery and the ice bridges crack when you drive on them!',
+  },
+  {
+    id: 'sunset', name: 'DESERT', icon: '🏜️', price: 30,
+    gravity: 1, grip: 0.85, ice: false,
+    sky: ['#ff9e6d', '#ffd9a0'], ground: '#c8894f', grass: '#e3b778',
+    sun: '#ff6b35', cloud: 'rgba(255,220,190,0.75)', rock: '#8a5a33', rockDark: '#6f4526',
+    say: 'The hot desert! The sand is a little slippery.',
+  },
+];
+function stageById(id) {
+  return STAGE_CATALOG.find(s => s.id === id) || STAGE_CATALOG[0];
 }
 
 // Geometry in "car units": axle line is y=0, car faces +x (right).

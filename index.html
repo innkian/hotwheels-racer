@@ -33,6 +33,55 @@
     </div>
   </section>
 
+  <section id="screen-learnmenu" class="screen">
+    <div id="learn-hud">
+      <button id="btn-learnmenu-back" class="mini-btn">⬅</button>
+      <h2>📚 Learning Games</h2>
+      <div></div>
+    </div>
+    <div id="learn-choices">
+      <button id="btn-go-listen" class="big-btn orange">👂 LISTEN &amp; FIND<br><span class="learn-sub">Hear it, tap the right car</span></button>
+      <button id="btn-go-quiz" class="big-btn">🏎️ QUIZ RACER<br><span class="learn-sub">Answer right — your car goes faster!</span></button>
+    </div>
+  </section>
+
+  <section id="screen-quiz" class="screen">
+    <div id="quiz-subject">
+      <div id="learn-hud">
+        <button id="btn-quiz-back" class="mini-btn">⬅</button>
+        <h2>🏎️ Quiz Racer</h2>
+        <div></div>
+      </div>
+      <p class="multi-hint">Pick what you want to race with!</p>
+      <div id="quiz-subject-grid">
+        <button class="quiz-subj" data-subj="math">➕<span>MATHS</span></button>
+        <button class="quiz-subj" data-subj="science">🔬<span>SCIENCE</span></button>
+        <button class="quiz-subj" data-subj="english">📖<span>ENGLISH</span></button>
+        <button class="quiz-subj" data-subj="mixed">🎲<span>MIXED</span></button>
+      </div>
+      <div id="quiz-age-row">
+        <button class="quiz-age" data-age="4">🐣<span>AGE 4-5</span></button>
+        <button class="quiz-age" data-age="6">🦊<span>AGE 6-7</span></button>
+        <button class="quiz-age" data-age="8">🦅<span>AGE 8+</span></button>
+      </div>
+    </div>
+
+    <div id="quiz-play" class="hidden">
+      <div id="quiz-hud">
+        <button id="btn-quiz-quit" class="mini-btn">⬅</button>
+        <div id="quiz-speedo">🚗 0 km/h</div>
+        <div id="quiz-streak">🔥 0</div>
+        <div id="quiz-progress-wrap"><div id="quiz-progress"></div><span id="quiz-flag">🏁</span></div>
+      </div>
+      <canvas id="quiz-canvas"></canvas>
+      <div id="quiz-question">…</div>
+      <div id="quiz-answers"></div>
+      <div id="quiz-result" class="overlay hidden">
+        <div class="panel" id="quiz-result-panel"></div>
+      </div>
+    </div>
+  </section>
+
   <section id="screen-listen" class="screen">
     <div id="listen-hud">
       <button id="btn-listen-back" class="mini-btn">⬅</button>
@@ -78,6 +127,9 @@
       <button class="shop-tab" data-cat="hats">🎩<span>HATS</span></button>
       <button class="shop-tab" data-cat="gadgets">🧲<span>GADGETS</span></button>
       <button class="shop-tab" data-cat="horns">📯<span>HORNS</span></button>
+      <button class="shop-tab" data-cat="suspension">🔩<span>SPRINGS</span></button>
+      <button class="shop-tab" data-cat="drive">⚙️<span>4WD</span></button>
+      <button class="shop-tab" data-cat="stages">🌍<span>WORLDS</span></button>
       <button class="shop-tab" data-cat="trails">🌈<span>TRAILS</span></button>
     </div>
     <div id="shop-grid"></div>
@@ -202,6 +254,7 @@
 <script src="js/rivals.js"></script>
 <script src="js/game.js"></script>
 <script src="js/listen.js"></script>
+<script src="js/quizracer.js"></script>
 <script src="js/builder.js"></script>
 <script src="js/workshop.js"></script>
 <script src="js/carmaker.js"></script>

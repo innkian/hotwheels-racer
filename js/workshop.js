@@ -17,6 +17,9 @@
     drivers: { equipped: () => save.gear.driver,  setEquip: v => save.gear.driver = v,  owned: () => save.owned.drivers },
     hats:    { equipped: () => save.gear.hat,     setEquip: v => save.gear.hat = v,     owned: () => save.owned.hats },
     horns:   { equipped: () => save.gear.horn,    setEquip: v => save.gear.horn = v,    owned: () => save.owned.horns },
+    suspension: { equipped: () => save.gear.suspension, setEquip: v => save.gear.suspension = v, owned: () => save.owned.suspension },
+    drive:   { equipped: () => save.gear.drive,   setEquip: v => save.gear.drive = v,   owned: () => save.owned.drive },
+    stages:  { equipped: () => save.gear.stage,   setEquip: v => save.gear.stage = v,   owned: () => save.owned.stages },
     trails:  { equipped: () => save.gear.trail,   setEquip: v => save.gear.trail = v,   owned: () => save.owned.trails },
     gadgets: {
       toggle: true,
@@ -58,6 +61,16 @@
       c.fillStyle = '#f1c27d';
       c.beginPath(); c.arc(w / 2, h / 2 + 10, h / 3.4, 0, Math.PI * 2); c.fill();
       drawHat(c, w / 2, h / 2 + 10 - h / 3.4, h / 3.4, item.id);
+    } else if (cat === 'stages') {
+      const g = c.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, item.sky[0]); g.addColorStop(1, item.sky[1]);
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      c.fillStyle = item.ground; c.fillRect(0, h * 0.62, w, h * 0.38);
+      c.strokeStyle = item.grass; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(0, h * 0.62); c.lineTo(w, h * 0.62); c.stroke();
+      c.font = `${Math.round(h * 0.4)}px sans-serif`;
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(item.icon, w / 2, h * 0.32);
     } else {
       c.font = `${Math.round(h * 0.62)}px sans-serif`;
       c.textAlign = 'center';
@@ -71,7 +84,8 @@
       t.classList.toggle('selected', t.dataset.cat === category));
     grid.innerHTML = '';
     const slot = SLOTS[category];
-    GEAR_CATALOG[category].forEach(item => {
+    const items = category === 'stages' ? STAGE_CATALOG : GEAR_CATALOG[category];
+    items.forEach(item => {
       const owned = slot.owned().includes(item.id);
       const equipped = slot.toggle ? slot.isOn(item.id) : slot.equipped() === item.id;
       const card = document.createElement('div');

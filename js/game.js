@@ -9,8 +9,8 @@ function defaultSave() {
     coins: 0,
     winProgress: 0,
     customCars: [],
-    gear: { engine: 1, tyres: 'normal', driver: 'max', hat: 'none', horn: 'beep', trail: 'none', gadgets: [] },
-    owned: { engines: [1], tyres: ['normal'], drivers: ['max', 'mia'], hats: ['none', 'cap'], gadgets: [], horns: ['beep'], trails: ['none'] },
+    gear: { engine: 1, tyres: 'normal', driver: 'max', hat: 'none', horn: 'beep', trail: 'none', gadgets: [], suspension: 'basic', drive: '2wd', stage: 'earth' },
+    owned: { engines: [1], tyres: ['normal'], drivers: ['max', 'mia'], hats: ['none', 'cap'], gadgets: [], horns: ['beep'], trails: ['none'], suspension: ['basic'], drive: ['2wd'], stages: ['earth'] },
   };
 }
 function loadSave() {
@@ -59,6 +59,8 @@ const screens = {
   garage: document.getElementById('screen-garage'),
   race: document.getElementById('screen-race'),
   listen: document.getElementById('screen-listen'),
+  learnmenu: document.getElementById('screen-learnmenu'),
+  quiz: document.getElementById('screen-quiz'),
   build: document.getElementById('screen-build'),
   workshop: document.getElementById('screen-workshop'),
   maker: document.getElementById('screen-maker'),
@@ -72,6 +74,7 @@ function showScreen(name) {
   if (name === 'garage') renderGarage();
   if (name === 'race') initRace();
   if (name === 'listen' && window.initListen) window.initListen();
+  if (name === 'quiz' && window.initQuiz) window.initQuiz();
   if (name === 'build' && window.initBuild) window.initBuild();
   if (name === 'workshop' && window.initWorkshop) window.initWorkshop();
   if (name === 'maker' && window.initMaker) window.initMaker();
@@ -97,7 +100,10 @@ function renderTitle() {
 }
 document.getElementById('btn-play').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('race'); });
 document.getElementById('btn-garage').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('garage'); });
-document.getElementById('btn-listen').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('listen'); });
+document.getElementById('btn-listen').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('learnmenu'); });
+document.getElementById('btn-learnmenu-back').addEventListener('click', () => { SFX.click(); showScreen('title'); });
+document.getElementById('btn-go-listen').addEventListener('click', () => { SFX.click(); showScreen('listen'); });
+document.getElementById('btn-go-quiz').addEventListener('click', () => { SFX.click(); showScreen('quiz'); });
 document.getElementById('btn-build').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('build'); });
 document.getElementById('btn-workshop').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('workshop'); });
 document.getElementById('btn-maker').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('maker'); });
@@ -500,6 +506,7 @@ function sampleGround(x, refY) {
   let y = terra.ground(x);
   if (refY !== undefined && terra.platforms) {
     for (const p of terra.platforms) {
+      if (p.gone) continue;
       if (Math.abs(x - p.x) <= p.half && refY <= p.y - WHEEL_R + 14 && p.y < y) y = p.y;
     }
   }
@@ -664,7 +671,7 @@ function stepAiCar(o, dt) {
   if (o.grounded) {
     const pose = groundPose(o.x, o.y);
     const climbing = pose.slope < 0 && o.vx > -20;
-    const slipping = climbing && Math.abs(pose.slope) > 0.85;  // AI has grippy tyres
+    const slipping = climbing && Math.abs(pose.slope) > 0.85 * race.stage.grip;  // ice makes them slip too
     let accelMult = slipping ? 0.15 : 1;
     let cap = o.maxSpeed;
     if (submerged) {
@@ -674,7 +681,7 @@ function stepAiCar(o, dt) {
     }
     if (gas) o.vx += o.accel * accelMult * (o.vx < 220 ? 1.8 : 1) * dt;
     if (brake) o.vx -= BRAKE_DECEL * dt;
-    o.vx += GRAVITY * Math.sin(pose.slope) * dt * 0.5;
+    o.vx += race.gravity * Math.sin(pose.slope) * dt * 0.5;
     o.vx *= Math.max(0, 1 - 0.28 * dt);
     o.vx = Math.min(cap, Math.max(-60, o.vx));
 
@@ -682,7 +689,7 @@ function stepAiCar(o, dt) {
     o.x += o.vx * dt;
     const newPose = groundPose(o.x, o.y);
     const requiredVy = (newPose.y - prevY) / dt;
-    const ballisticVy = (o.vyGround || 0) + GRAVITY * dt;
+    const ballisticVy = (o.vyGround || 0) + race.gravity * dt;
     if (requiredVy > ballisticVy + 80 * dt && Math.abs(o.vx) > 120) {
       o.grounded = false;
       o.vy = ballisticVy;
@@ -693,7 +700,7 @@ function stepAiCar(o, dt) {
       o.angle += normAngle(newPose.slope - o.angle) * Math.min(1, dt * 12);
     }
   } else {
-    o.vy += GRAVITY * (submerged ? 0.4 : 1) * dt;
+    o.vy += race.gravity * (submerged ? 0.4 : 1) * dt;
     if (submerged) { o.vx *= Math.max(0, 1 - 1.1 * dt); o.vy *= Math.max(0, 1 - 1.4 * dt); }
     o.x += o.vx * dt;
     o.y += o.vy * dt;
@@ -772,16 +779,20 @@ function initRace(keepTrack) {
   const startPose = groundPose(200);
   const engine = gearItem('engines', save.gear.engine);
   const tyres = gearItem('tyres', save.gear.tyres);
+  const stage = stageById(save.gear.stage);
   race = {
     track,
     mode,                       // 'race' or endless 'drive'
     milestone: 0,               // last spoken distance milestone (drive mode)
     customTrack: currentCustom,
     maxHearts: hearts,
+    stage,
+    gravity: GRAVITY * stage.gravity,
     maxSpeed: MAX_SPEED * engine.speed * tyres.speed * bodyHandling(getDesign(save.selected)).topEnd,
     accel: ACCEL * engine.speed,
     slopeK: tyres.slope,
-    grip: tyres.grip * bodyHandling(getDesign(save.selected)).grip,
+    grip: tyres.grip * bodyHandling(getDesign(save.selected)).grip * stage.grip * gearItem('drive', save.gear.drive).climb,
+    landTolerance: gearItem('suspension', save.gear.suspension).land * (stage.landBonus || 1),
     engineLevel: engine.id,
     rocks: [],
     rockTimer: 1,
@@ -1068,7 +1079,7 @@ function updateRace(dt) {
     if (canDrive && inp.gas && !race.outOfFuel) car.vx += race.accel * accelMult * (car.vx < 220 && !submerged ? 1.8 : 1) * dt;
     if (canDrive && inp.brake) car.vx -= BRAKE_DECEL * dt;
     // gravity along the slope (tyre grip reduces it) + rolling drag
-    car.vx += GRAVITY * Math.sin(pose.slope) * dt * race.slopeK;
+    car.vx += race.gravity * Math.sin(pose.slope) * dt * race.slopeK;
     car.vx *= Math.max(0, 1 - 0.28 * dt);
     car.vx = Math.min(speedCap, Math.max(REVERSE_MAX, car.vx));
 
@@ -1080,7 +1091,7 @@ function updateRace(dt) {
     // car down — preserves the upward velocity gained climbing a bump, so
     // speeding over a crest really sends you flying (and into cave roofs).
     const requiredVy = (newPose.y - prevY) / dt;
-    const ballisticVy = (car.vyGround || 0) + GRAVITY * dt;
+    const ballisticVy = (car.vyGround || 0) + race.gravity * dt;
     if (requiredVy > ballisticVy + 80 * dt && Math.abs(car.vx) > 120) {
       car.grounded = false;
       car.vy = ballisticVy;
@@ -1101,7 +1112,7 @@ function updateRace(dt) {
     car.angVel = Math.max(-4, Math.min(4, car.angVel));
     car.angle += car.angVel * dt;
     // water is buoyant: sink slowly, swim sluggishly
-    car.vy += GRAVITY * (submerged ? 0.4 : 1) * dt;
+    car.vy += race.gravity * (submerged ? 0.4 : 1) * dt;
     if (submerged) { car.vx *= Math.max(0, 1 - 1.1 * dt); car.vy *= Math.max(0, 1 - 1.4 * dt); }
     car.x += car.vx * dt;
     car.y += car.vy * dt;
@@ -1113,11 +1124,11 @@ function updateRace(dt) {
       car.grounded = true;
       const diff = Math.abs(normAngle(car.angle - pose.slope));
       // stable bodies (tank, 4x4) survive rougher landings than an F1
-      if (diff > 1.7 * race.handling.stability && !submerged) {
+      if (diff > 1.7 * race.handling.stability * race.landTolerance && !submerged) {
         car.angle = pose.slope;   // crunched back onto its wheels
         Speech.say('Ouch! Land on your wheels!');
         bonk(false);
-      } else if (car.vy > 950 && !submerged) {
+      } else if (car.vy > 950 * race.landTolerance && !submerged) {
         car.angle = pose.slope;
         bonk(false);
       } else if (submerged && diff > 2.0) {
@@ -1272,7 +1283,7 @@ function updateRace(dt) {
   }
   for (const rock of race.rocks) {
     if (rock.settled > 0) { rock.settled += dt; continue; }
-    rock.vy += GRAVITY * 0.85 * dt;
+    rock.vy += race.gravity * 0.85 * dt;
     rock.y += rock.vy * dt;
     const gy = terra.ground(rock.x) - rock.r;
     if (rock.y >= gy) { rock.y = gy; rock.settled = 0.001; }
@@ -1427,19 +1438,43 @@ function renderRace() {
   race.camX += (targetCamX - race.camX) * 0.15;
   race.camY += (targetCamY - race.camY) * 0.08;
 
-  // sky
+  // sky (colours come from the chosen stage)
+  const ST = race.stage;
   const sky = rctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#7ec8ff');
-  sky.addColorStop(1, '#d9f0ff');
+  sky.addColorStop(0, ST.sky[0]);
+  sky.addColorStop(1, ST.sky[1]);
   rctx.fillStyle = sky;
   rctx.fillRect(0, 0, w, h);
 
+  // stars on the moon, snowfall in the arctic
+  if (ST.stars) {
+    rctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 40; i++) {
+      const sx = ((i * 137.5 - race.camX * 0.05) % (w + 40) + w + 40) % (w + 40) - 20;
+      const sy = (i * 61) % (h * 0.6);
+      rctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(i * 1.7 + performance.now() / 900));
+      rctx.fillRect(sx, sy, 2, 2);
+    }
+    rctx.globalAlpha = 1;
+  }
+  if (ST.snow) {
+    rctx.fillStyle = 'rgba(255,255,255,0.9)';
+    for (let i = 0; i < 45; i++) {
+      const t = performance.now() / 1000;
+      const sx = ((i * 97 - race.camX * 0.3 + Math.sin(t + i) * 22) % (w + 30) + w + 30) % (w + 30) - 15;
+      const sy = ((i * 53 + t * 60) % h);
+      rctx.beginPath();
+      rctx.arc(sx, sy, 2.2, 0, Math.PI * 2);
+      rctx.fill();
+    }
+  }
+
   // sun + parallax clouds
-  rctx.fillStyle = '#ffd60a';
+  rctx.fillStyle = ST.sun;
   rctx.beginPath();
   rctx.arc(w * 0.85, h * 0.15, 36, 0, Math.PI * 2);
   rctx.fill();
-  rctx.fillStyle = 'rgba(255,255,255,0.85)';
+  rctx.fillStyle = ST.cloud;
   for (let i = 0; i < 4; i++) {
     const cx = ((i * 700 - race.camX * 0.25) % (VIEW_W + 400) + VIEW_W + 400) % (VIEW_W + 400) - 200;
     const cy = 60 + (i % 2) * 55;
@@ -1463,7 +1498,7 @@ function renderRace() {
   for (let x = x0; x <= x1; x += 12) rctx.lineTo(x, terra.ground(x));
   rctx.lineTo(x1, bottomY);
   rctx.closePath();
-  rctx.fillStyle = '#8b5e34';
+  rctx.fillStyle = ST.ground;
   rctx.fill();
   // grass lip
   rctx.beginPath();
@@ -1471,7 +1506,7 @@ function renderRace() {
     if (x === x0) rctx.moveTo(x, terra.ground(x));
     else rctx.lineTo(x, terra.ground(x));
   }
-  rctx.strokeStyle = '#57a639';
+  rctx.strokeStyle = ST.grass;
   rctx.lineWidth = 12;
   rctx.stroke();
 
@@ -1500,10 +1535,10 @@ function renderRace() {
     }
     rctx.lineTo(cx1, race.camY - 100);
     rctx.closePath();
-    rctx.fillStyle = '#5a4632';
+    rctx.fillStyle = ST.rock;
     rctx.fill();
     // stalactites
-    rctx.fillStyle = '#4a3826';
+    rctx.fillStyle = ST.rockDark;
     for (let x = z.start + 60; x < z.end - 40; x += 110) {
       if (x < x0 || x > x1) continue;
       const cy = terra.ceiling(x);
