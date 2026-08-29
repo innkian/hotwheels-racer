@@ -98,16 +98,16 @@ function renderTitle() {
   const wallet = document.getElementById('title-wallet');
   if (wallet) wallet.textContent = '🪙 ' + save.coins;
 }
-document.getElementById('btn-play').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('race'); });
+document.getElementById('btn-play').addEventListener('click', () => { SFX.unlock(); if (playBlocked()) return; SFX.click(); showScreen('race'); });
 document.getElementById('btn-garage').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('garage'); });
-document.getElementById('btn-listen').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('learnmenu'); });
+document.getElementById('btn-listen').addEventListener('click', () => { SFX.unlock(); if (playBlocked()) return; SFX.click(); showScreen('learnmenu'); });
 document.getElementById('btn-learnmenu-back').addEventListener('click', () => { SFX.click(); showScreen('title'); });
 document.getElementById('btn-go-listen').addEventListener('click', () => { SFX.click(); showScreen('listen'); });
 document.getElementById('btn-go-quiz').addEventListener('click', () => { SFX.click(); showScreen('quiz'); });
 document.getElementById('btn-build').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('build'); });
 document.getElementById('btn-workshop').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('workshop'); });
 document.getElementById('btn-maker').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('maker'); });
-document.getElementById('btn-multi').addEventListener('click', () => { SFX.unlock(); SFX.click(); showScreen('multi'); });
+document.getElementById('btn-multi').addEventListener('click', () => { SFX.unlock(); if (playBlocked()) return; SFX.click(); showScreen('multi'); });
 
 // difficulty picker
 function renderDifficulty() {
@@ -193,9 +193,66 @@ function showGrownups() {
       </div>`;
     })()}
     <p style="font-size:13px;color:#555;margin:0;">Tip: when he wins a car, ask him to tell you its color and name out loud — retelling builds the skills the teacher flagged.</p>
+    ${(() => {
+      const s = ScreenTime.settings;
+      const wk = ScreenTime.week();
+      const left = ScreenTime.minutesLeft();
+      const maxMin = Math.max(10, ...wk.map(d => d.total));
+      return `<div style="width:100%;text-align:left;border-top:2px solid #eee;padding-top:8px;">
+        <h3 style="margin:4px 0;color:#1d3557;font-size:16px;">⏱ Screen time</h3>
+        <p style="margin:0 0 6px;font-size:14px;color:#333;">
+          Today: <b>${ScreenTime.minutesToday()} min</b>
+          (🏎️ ${Math.round(ScreenTime.todayRec.racing / 60)} racing · 📚 ${Math.round(ScreenTime.todayRec.learning / 60)} learning)
+          ${s.limitMin ? ` · <b>${left === Infinity ? '' : Math.ceil(left)} min left</b> of ${ScreenTime.allowanceMin()}` : ' · no limit set'}
+        </p>
+        <div style="display:flex;align-items:flex-end;gap:6px;height:60px;margin-bottom:6px;">
+          ${wk.slice().reverse().map(d => `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+              <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:44px;">
+                <div style="background:#f77f00;height:${(d.learning / maxMin) * 44}px;border-radius:3px 3px 0 0;"></div>
+                <div style="background:#2b6cff;height:${((d.total - d.learning) / maxMin) * 44}px;"></div>
+              </div>
+              <span style="font-size:9px;color:#666;">${d.label}</span>
+            </div>`).join('')}
+        </div>
+        <p style="margin:0 0 6px;font-size:11px;color:#666;">🟠 learning 🔵 racing · last 7 days</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+          <span style="font-size:13px;color:#333;">Daily limit:</span>
+          ${[0, 15, 30, 45, 60].map(m => `
+            <button class="st-limit mini-btn" data-min="${m}"
+              style="padding:5px 9px;font-size:13px;${s.limitMin === m ? 'background:#d8f3dc;border:2px solid #2a9d4f;' : ''}">
+              ${m === 0 ? 'Off' : m + 'm'}</button>`).join('')}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="btn-st-bonus" class="mini-btn" style="font-size:13px;">+10 min today</button>
+          <button id="btn-st-breaks" class="mini-btn" style="font-size:13px;">Eye breaks: ${s.breaksOn ? 'ON' : 'OFF'}</button>
+          <button id="btn-st-reset" class="mini-btn" style="font-size:13px;">Reset today</button>
+        </div>
+      </div>`;
+    })()}
     <button id="btn-grownups-close" class="big-btn gray">Close</button>
   `;
   document.getElementById('grownups-overlay').classList.remove('hidden');
+  document.querySelectorAll('.st-limit').forEach(b => b.addEventListener('click', () => {
+    ScreenTime.setLimit(+b.dataset.min);
+    SFX.click();
+    showGrownups();
+  }));
+  document.getElementById('btn-st-bonus').addEventListener('click', () => {
+    ScreenTime.grantBonus(10);
+    SFX.click();
+    showGrownups();
+  });
+  document.getElementById('btn-st-breaks').addEventListener('click', () => {
+    ScreenTime.setBreaks(!ScreenTime.settings.breaksOn);
+    SFX.click();
+    showGrownups();
+  });
+  document.getElementById('btn-st-reset').addEventListener('click', () => {
+    ScreenTime.resetToday();
+    SFX.click();
+    showGrownups();
+  });
   document.getElementById('btn-grownups-close').addEventListener('click', () => {
     document.getElementById('grownups-overlay').classList.add('hidden');
   });
@@ -2015,6 +2072,81 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+// ===================== Screen time =====================
+function showStBanner(text, ms) {
+  const el = document.getElementById('st-banner');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  clearTimeout(showStBanner._t);
+  showStBanner._t = setTimeout(() => el.classList.add('hidden'), ms || 6000);
+}
+
+ScreenTime.onWarning(kind => {
+  if (kind === 'break') {
+    showStBanner('👀 Eye break! Look out the window for 20 seconds.', 12000);
+    Speech.say('Time for a quick eye break! Look far away out the window, and blink!');
+  } else if (kind === 'five') {
+    showStBanner('⏳ 5 minutes of play time left');
+    Speech.say('Five minutes of play time left!');
+  } else if (kind === 'one') {
+    showStBanner('⏳ 1 minute left — finish this race!');
+    Speech.say('One minute left! Finish this race!');
+  }
+});
+
+// When the limit lands mid-race we wait for the race to end, so nobody is
+// yanked out of a lap they are about to win.
+let stWindDown = false;
+ScreenTime.onLimitReached(() => {
+  stWindDown = true;
+  if (currentScreen === 'race' && race && race.state === 'running') {
+    showStBanner("⏳ Time's up after this race!", 10000);
+    Speech.say("That's the last race for today. Finish strong!");
+  } else {
+    showTimeUp();
+  }
+});
+
+function showTimeUp() {
+  stWindDown = false;
+  const t = ScreenTime.todayRec;
+  const panel = document.getElementById('timeup-panel');
+  panel.innerHTML = `
+    <h2>🌟 All done for today!</h2>
+    <p style="font-size:19px;color:#1d3557;font-weight:700;">
+      You played for ${ScreenTime.minutesToday()} minutes.<br>
+      🏎️ Racing ${Math.round(t.racing / 60)} min · 📚 Learning ${Math.round(t.learning / 60)} min
+    </p>
+    <p style="font-size:17px;color:#2a9d4f;font-weight:700;">
+      Go and play outside — your cars will be here tomorrow! 🚗
+    </p>
+    <button id="btn-timeup-ok" class="big-btn gray">OK</button>`;
+  document.getElementById('timeup-overlay').classList.remove('hidden');
+  SFX.win();
+  Speech.say(`All done for today! You played for ${ScreenTime.minutesToday()} minutes. Time to go and play outside!`);
+  document.getElementById('btn-timeup-ok').addEventListener('click', () => {
+    SFX.click();
+    document.getElementById('timeup-overlay').classList.add('hidden');
+    showScreen('title');
+  });
+}
+
+setInterval(() => {
+  ScreenTime.tick(currentScreen);
+  // if the limit hit during a race, show the wind-down once it ends
+  if (stWindDown && !(currentScreen === 'race' && race && race.state === 'running')) {
+    showTimeUp();
+  }
+}, 1000);
+
+// Play buttons respect the limit (grown-ups can grant more time)
+function playBlocked() {
+  if (!ScreenTime.isOverLimit()) return false;
+  SFX.click();
+  showTimeUp();
+  return true;
+}
 
 // ===================== Init =====================
 renderTitle();
