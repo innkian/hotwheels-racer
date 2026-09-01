@@ -30,6 +30,8 @@
       if (type === 'jump') return (t > 0.35 && t < 0.62) ? gy - ((t - 0.35) / 0.27) * h * 0.38 : gy;
       if (type === 'water') return (t > 0.2 && t < 0.9) ? gy + h * 0.22 : gy;
       if (type === 'rocks') return gy + h * 0.18 * Math.sin(t * Math.PI);
+      if (type === 'bighill') return gy - h * 0.42 * Math.sin(t * Math.PI);
+      if (type === 'fork') return (t > 0.18 && t < 0.88) ? gy + h * 0.3 : gy;
       if (type === 'steep') {
         if (t <= 0.2) return gy;
         if (t <= 0.5) return gy - ((t - 0.2) / 0.3) * h * 0.45;
@@ -64,6 +66,12 @@
         c.moveTo(x - 6, h * 0.34); c.lineTo(x + 6, h * 0.34); c.lineTo(x, h * 0.34 + 11);
         c.closePath(); c.fill();
       }
+    }
+    if (type === 'fork') {
+      // draw the bridge with its gap
+      c.fillStyle = '#8d5a2b';
+      c.fillRect(w * 0.16, gy - 4, w * 0.28, 5);
+      c.fillRect(w * 0.60, gy - 4, w * 0.28, 5);
     }
     if (type === 'coins') {
       c.fillStyle = '#ffbf00';

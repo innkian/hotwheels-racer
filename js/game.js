@@ -357,9 +357,9 @@ const OPP_BASE_SPEED = [200, 260, 320];
 // ===================== Difficulty =====================
 const DIFFICULTIES = {
   easy:   { label: 'Easy',   icon: '🐢', fuelBurn: 0.55, oppMult: 0.72, hearts: 5, caves: 1, headStart: 900, hazards: 0, hazardPool: [], rockRate: 1.6 },
-  medium: { label: 'Medium', icon: '🚗', fuelBurn: 0.85, oppMult: 1.12, hearts: 3, caves: 2, headStart: 500, hazards: 1, hazardPool: ['water', 'rocks'], rockRate: 1.4 },
-  hard:   { label: 'Hard',   icon: '🚀', fuelBurn: 1.0, oppMult: 1.32, hearts: 3, caves: 3, headStart: 250, hazards: 2, hazardPool: ['water', 'rocks', 'steep'], rockRate: 1.0 },
-  expert: { label: 'Expert', icon: '🔥', fuelBurn: 1.1, oppMult: 1.45, hearts: 3, caves: 3, headStart: 150, hazards: 3, hazardPool: ['water', 'rocks', 'steep'], rockRate: 0.8 },
+  medium: { label: 'Medium', icon: '🚗', fuelBurn: 0.85, oppMult: 1.12, hearts: 3, caves: 2, headStart: 500, hazards: 1, hazardPool: ['water', 'rocks', 'fork'], rockRate: 1.4 },
+  hard:   { label: 'Hard',   icon: '🚀', fuelBurn: 1.0, oppMult: 1.32, hearts: 3, caves: 3, headStart: 250, hazards: 2, hazardPool: ['water', 'rocks', 'steep', 'fork'], rockRate: 1.0 },
+  expert: { label: 'Expert', icon: '🔥', fuelBurn: 1.1, oppMult: 1.45, hearts: 3, caves: 3, headStart: 150, hazards: 3, hazardPool: ['water', 'rocks', 'steep', 'fork'], rockRate: 0.8 },
 };
 function currentDifficulty() { return DIFFICULTIES[save.difficulty] || DIFFICULTIES.easy; }
 
@@ -380,6 +380,8 @@ const SEGMENT_TYPES = {
   water:    { label: 'WATER',    speak: 'Water! Jump on the logs!', code: 'w' },
   rocks:    { label: 'ROCKS',    speak: 'Falling rocks! Watch out!', code: 'k' },
   steep:    { label: 'STEEP',    speak: 'A super steep wall! You need monster tyres or a rocket engine!', code: 's' },
+  bighill:  { label: 'BIG HILL', speak: 'A huge hill! Climbing uses lots of fuel!', code: 'g' },
+  fork:     { label: 'TWO WAYS', speak: 'Two ways! Jump the bridge, or fall down the canyon!', code: 'f' },
 };
 
 // Track codes for share links: one letter per piece, e.g. "jcmho"
@@ -405,7 +407,7 @@ try {
 
 function rollSegments() {
   const D = currentDifficulty();
-  const fun = ['hills', 'bumps', 'jump', 'coins', 'mountain', 'hills', 'jump', 'coins'];
+  const fun = ['hills', 'bumps', 'jump', 'coins', 'mountain', 'bighill', 'hills', 'jump', 'coins'];
   const segs = [];
   for (let i = 0; i < 8; i++) segs.push(fun[Math.floor(Math.random() * fun.length)]);
   // caves and hazards land anywhere except the first segment
@@ -462,6 +464,7 @@ function buildTrack(segments, seed) {
   const platforms = [];  // one-way platforms (logs): land on top, drive under
   const rockZones = [];  // ravines with falling rocks
   const steeps = [];     // steep walls needing grip or big speed
+  const forks = [];      // canyon + bridge: two routes through
   // smooth base line (no pits/walls/ramps) — cave roofs and water surfaces use it
   const shapeBase = (x) => {
     const rampIn = Math.min(1, Math.max(0, (x - 300) / 600)); // flat start
@@ -475,6 +478,7 @@ function buildTrack(segments, seed) {
       else if (type === 'bumps') y += 11 * w * Math.sin(t * 16 * Math.PI);
       else if (type === 'mountain') y -= 100 * Math.sin(Math.PI * t);
       else if (type === 'rocks') y += 110 * Math.sin(Math.PI * t); // down into a ravine
+      else if (type === 'bighill') y -= 215 * Math.sin(Math.PI * t); // a real climb
     }
     return y;
   };
@@ -490,6 +494,18 @@ function buildTrack(segments, seed) {
       const rampInP = Math.min(1, u / 0.10);
       const rampOutP = Math.min(1, (1 - u) / 0.44);
       return 150 * Math.min(rampInP, rampOutP);
+    }
+    if (type === 'fork' && t > 0.16 && t < 0.90) {
+      // The canyon under the bridge — the harder low road. Sharp drop in,
+      // bumpy floor, then a long climb back out so it's tough but never a
+      // trap a child can't escape.
+      const u = (t - 0.16) / 0.74;
+      const dropIn = Math.min(1, u / 0.09);
+      const climbOut = Math.min(1, (1 - u) / 0.55);
+      // clamp: without this the envelope goes negative past the canyon end
+      // and the "pit" inverts into a hill
+      const env = Math.max(0, Math.min(dropIn, climbOut));
+      return (170 + 14 * Math.sin(u * 20)) * env;
     }
     if (type === 'steep') {
       // flat run-up, steep 260-high wall, small plateau, gentler ride down
@@ -520,6 +536,29 @@ function buildTrack(segments, seed) {
         platforms.push({ x: lx, half: 58, y: shapeBase(lx) - 8 });
       });
     }
+    if (type === 'fork') {
+      // A bridge across the canyon with a GAP in the middle. Arrive fast and
+      // you fly the gap and stay high (fuel + coins up there); arrive slow
+      // and you drop into the canyon and take the long, bumpy way round.
+      // Planks ride on top of the canyon. The last stretch of the near span
+      // ramps UP into a take-off lip: carry speed and you fly the gap to the
+      // far span; dawdle and you drop into the canyon. (A ground ramp would
+      // do nothing here — planks override the ground under them.)
+      const plank = (from, to, lift) => {
+        for (let f = from; f <= to; f += 0.03) {
+          const px = s0 + SEG_LEN * f;
+          platforms.push({ x: px, half: 30, y: shapeBase(px) - 6 - (lift ? lift(f) : 0), bridge: true });
+        }
+      };
+      // The far span sits lower than the near one, so clearing the gap is a
+      // real speed test: you must cover the gap before you fall past the far
+      // deck. (Planks are one-way — you can land on them but never climb up
+      // onto them — so a rising take-off ramp would simply be un-driveable.)
+      plank(0.13, 0.46);                 // near span, at deck level
+      plank(0.67, 0.88, () => -80);      // far span, one storey down
+      forks.push({ start: s0 + SEG_LEN * 0.16, end: s0 + SEG_LEN * 0.90,
+                   gapStart: s0 + SEG_LEN * 0.46, gapEnd: s0 + SEG_LEN * 0.67 });
+    }
     if (type === 'rocks') rockZones.push({ start: s0 + 100, end: s0 + 820 });
     if (type === 'steep') steeps.push({ start: s0 + 60, end: s0 + SEG_LEN, failX: s0 + 80 });
   };
@@ -541,7 +580,7 @@ function buildTrack(segments, seed) {
   };
   const inCave = (x) => caves.some(z => x > z.start && x < z.end);
   const waterAt = (x) => waters.find(z => x > z.start && x < z.end) || null;
-  const track = { segments, length, caves, ramps, waters, platforms, rockZones, steeps, ground, ceiling, inCave, waterAt, surface: shapeBase };
+  const track = { segments, length, caves, ramps, waters, platforms, rockZones, steeps, forks, ground, ceiling, inCave, waterAt, surface: shapeBase };
   // grow the track by one segment (endless Long Drive mode); deterministic
   // when seeded, so two devices extend into identical terrain
   track.extend = () => {
@@ -564,6 +603,7 @@ function buildTrack(segments, seed) {
     prune(platforms, p => p.x + p.half);
     prune(rockZones, z => z.end);
     prune(steeps, z => z.end);
+    prune(forks, z => z.end);
     return { type, i };
   };
   return track;
@@ -610,7 +650,18 @@ function makeCoins(track) {
 // Fuel cans: spaced so you must keep moving, and never inside a cave.
 function fuelCansForSegment(track, type, i) {
   if (type === 'cave' || i === 0) return [];
-  const x = START_PAD + i * SEG_LEN + SEG_LEN * 0.5;
+  const s0 = START_PAD + i * SEG_LEN;
+  if (type === 'fork') {
+    // one can on the bridge (the reward for making the jump) and one down
+    // in the canyon, so the hard route is still survivable
+    const hi = s0 + SEG_LEN * 0.74;   // on the lower far span
+    const lo = s0 + SEG_LEN * 0.5;    // down on the canyon floor
+    return [
+      { x: hi, y: track.surface(hi) + 30, got: false },
+      { x: lo, y: track.ground(lo) - 52, got: false },
+    ];
+  }
+  const x = s0 + SEG_LEN * 0.5;
   return [{ x, y: track.ground(x) - 52, got: false }];
 }
 function makeFuelCans(track) {
@@ -626,6 +677,25 @@ function coinsForSegment(track, type, i) {
       [0.36, 0.53, 0.70].forEach(f => {
         const cx = s0 + SEG_LEN * f;
         coins.push({ x: cx, y: track.surface(cx) - 70, got: false });
+      });
+      return coins;
+    }
+    if (type === 'fork') {
+      // High-road pickups must sit just above whichever deck they're on —
+      // the far span is a storey lower, so anything placed at near-deck
+      // height out there would hang unreachably in the air.
+      [0.24, 0.30, 0.36].forEach(f => {          // near span
+        const cx = s0 + SEG_LEN * f;
+        coins.push({ x: cx, y: track.surface(cx) - 52, got: false });
+      });
+      [0.70, 0.76, 0.82].forEach(f => {          // far span (80 lower)
+        const cx = s0 + SEG_LEN * f;
+        coins.push({ x: cx, y: track.surface(cx) + 28, got: false });
+      });
+      // ...and a smaller consolation along the canyon floor
+      [0.45, 0.56].forEach(f => {
+        const cx = s0 + SEG_LEN * f;
+        coins.push({ x: cx, y: track.ground(cx) - 55, got: false });
       });
       return coins;
     }
@@ -954,7 +1024,9 @@ function resizeRaceCanvas() {
   const w = raceCanvas.clientWidth, h = raceCanvas.clientHeight;
   raceCanvas.width = w * dpr; raceCanvas.height = h * dpr;
   rctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  viewScale = w / VIEW_W;
+  // a zero-width canvas (screen not laid out yet) would make viewScale 0,
+  // which sends the camera to NaN and renders an empty world
+  viewScale = w > 0 ? w / VIEW_W : (viewScale || 1);
 }
 window.addEventListener('resize', () => { if (currentScreen === 'race') resizeRaceCanvas(); });
 
@@ -1222,7 +1294,10 @@ function updateRace(dt) {
 
   // ---- FUEL: the clock that makes every hill a decision ----
   if (!race.outOfFuel) {
-    const burn = (inp.gas ? FUEL_BURN : FUEL_IDLE) * race.handling.thirst * (currentDifficulty().fuelBurn || 1);
+    // climbing costs real fuel — a big hill drinks it
+    const climb = car.grounded ? Math.max(0, -groundPose(car.x, car.y).slope) : 0;
+    const climbCost = 1 + climb * 2.2;
+    const burn = (inp.gas ? FUEL_BURN * climbCost : FUEL_IDLE) * race.handling.thirst * (currentDifficulty().fuelBurn || 1);
     race.fuel = Math.max(0, race.fuel - burn * dt);
     if (race.fuel <= 0) {
       race.outOfFuel = true;
@@ -1321,13 +1396,22 @@ function updateRace(dt) {
     race.waterStuckTimer += dt;
     if (race.waterStuckTimer > 2.5) {
       race.waterStuckTimer = 0;
-      car.bonkCooldown = 0;
-      race.shieldCharge = 0;  // rescue costs the heart even with a shield
-      bonk(false);
-      // towed BACK to the near bank — drowning must never be a shortcut
-      Speech.say('Too deep! The tow truck pulled you out. Go fast and jump on the logs, or get a bigger engine!');
+      // count attempts at THIS crossing: after three, the truck simply carries
+      // them across, so a young player can never spiral out on one stretch
+      waterZone._tows = (waterZone._tows || 0) + 1;
+      const carriedOver = waterZone._tows >= 3;
+      if (!carriedOver) {
+        car.bonkCooldown = 0;
+        race.shieldCharge = 0;  // rescue costs the heart even with a shield
+        bonk(false);
+        // towed BACK to the near bank — drowning must never be a shortcut
+        Speech.say('Too deep! The tow truck pulled you out. Go fast and jump on the logs, or get a bigger engine!');
+      } else {
+        SFX.coin();
+        Speech.say('The tow truck carried you across! Off you go!');
+      }
       if (race.state === 'running') {
-        car.x = Math.max(200, waterZone.start - 420);
+        car.x = carriedOver ? waterZone.end + 90 : Math.max(200, waterZone.start - 420);
         const p = groundPose(car.x, undefined);
         car.y = p.y; car.angle = p.slope; car.vx = 0; car.vy = 0; car.grounded = true;
       }
@@ -1390,6 +1474,7 @@ function updateRace(dt) {
     [race.track.waters, 'Water ahead! Jump on the logs!'],
     [race.track.rockZones, 'Watch out! Falling rocks!'],
     [race.track.steeps, 'A big wall is coming! Go super fast!'],
+    [race.track.forks, 'Two ways ahead! Go fast to fly the bridge!'],
   ];
   for (const [zones, say] of warnGroups) {
     for (const z of zones) {
@@ -1397,6 +1482,19 @@ function updateRace(dt) {
         z._hwarned = true;
         Speech.say(say);
       }
+    }
+  }
+
+  // which road did they end up on?
+  for (const z of race.track.forks) {
+    if (!z._called && car.x > z.gapEnd + 40 && car.x < z.end) {
+      z._called = true;
+      // 'high' = actually standing on a bridge plank (height alone is
+      // unreliable, since the canyon floor climbs back up near the exit)
+      const high = race.track.platforms.some(p =>
+        p.bridge && !p.gone && Math.abs(p.x - car.x) <= p.half &&
+        Math.abs(car.y - (p.y - WHEEL_R)) < 24);
+      Speech.say(high ? 'You flew the bridge! Nice one!' : 'Down in the canyon! Take the long way round!');
     }
   }
 
@@ -1503,7 +1601,9 @@ function renderRace() {
   // camera follows the car
   const targetCamX = car.x - VIEW_W * 0.32;
   const targetCamY = car.y - (h / viewScale) * 0.52;
-  if (!race.camInit) { race.camX = targetCamX; race.camY = targetCamY; race.camInit = true; }
+  if (!race.camInit || !isFinite(race.camX) || !isFinite(race.camY)) {
+    race.camX = targetCamX; race.camY = targetCamY; race.camInit = true;
+  }
   race.camX += (targetCamX - race.camX) * 0.15;
   race.camY += (targetCamY - race.camY) * 0.08;
 
